@@ -32,8 +32,8 @@ interface JournalEntryItem {
   id: string;
   journal_entry_id: string;
   account_id: string;
-  debit: number;
-  credit: number;
+  debit: number | null;
+  credit: number | null;
   account?: ChartOfAccount;
 }
 
@@ -116,7 +116,7 @@ export default function JournalTableEditor({
       // Fetch journal entry items for all entries
       const { data: itemsData, error: itemsError } = await supabase
         .from("journal_entry_items")
-        .select("*, chart_of_accounts(id, account_code, account_name)")
+        .select("*, chart_of_accounts(account_code, account_name)")
         .in(
           "journal_entry_id",
           entriesData.map((entry) => entry.id),
@@ -144,7 +144,7 @@ export default function JournalTableEditor({
       });
 
       console.log("Processed entries with items:", entriesWithItems);
-      setJournalEntries(entriesWithItems);
+      setJournalEntries(entriesWithItems as JournalEntry[]);
     } catch (err: any) {
       console.error("Error fetching journal entries:", err);
       setError(err.message || "Terjadi kesalahan saat mengambil data jurnal");

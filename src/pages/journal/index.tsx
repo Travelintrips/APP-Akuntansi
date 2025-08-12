@@ -1,19 +1,14 @@
 import { useState } from "react";
-import JournalEntryForm from "@/components/journal/JournalEntryForm";
 import JournalTableEditor from "@/components/journal/JournalTableEditor";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function JournalPage() {
-  const [formSubmitted, setFormSubmitted] = useState(false);
-  const [activeTab, setActiveTab] = useState<"form" | "table">("form");
+  const [refreshTrigger, setRefreshTrigger] = useState(false);
 
-  const handleFormSuccess = () => {
-    setFormSubmitted(true);
-    // Reset the success message after 3 seconds
-    setTimeout(() => setFormSubmitted(false), 3000);
+  const handleRefresh = () => {
+    setRefreshTrigger(!refreshTrigger);
   };
 
   return (
@@ -34,31 +29,7 @@ export default function JournalPage() {
         </div>
       </div>
 
-      {formSubmitted && (
-        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
-          Jurnal berhasil disimpan dan diproses ke buku besar!
-        </div>
-      )}
-
-      <Tabs
-        defaultValue="form"
-        value={activeTab}
-        onValueChange={(value) => setActiveTab(value as "form" | "table")}
-        className="w-full"
-      >
-        <TabsList className="grid w-full grid-cols-2 mb-6">
-          <TabsTrigger value="form">Form Jurnal</TabsTrigger>
-          <TabsTrigger value="table">Tabel Editor</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="form">
-          <JournalEntryForm onSuccess={handleFormSuccess} />
-        </TabsContent>
-
-        <TabsContent value="table">
-          <JournalTableEditor onRefresh={() => setFormSubmitted(true)} />
-        </TabsContent>
-      </Tabs>
+      <JournalTableEditor onRefresh={handleRefresh} />
     </div>
   );
 }

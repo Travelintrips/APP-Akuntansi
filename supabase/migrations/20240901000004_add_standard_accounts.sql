@@ -60,6 +60,12 @@ BEGIN
     INSERT INTO public.chart_of_accounts (account_code, account_name, account_type, parent_id, normal_balance) 
     VALUES ('4150', 'Pendapatan Rental Car', 'REVENUE', (SELECT id FROM public.chart_of_accounts WHERE account_code = '4100'), 'CREDIT');
     
+    INSERT INTO public.chart_of_accounts (account_code, account_name, account_type, parent_id, normal_balance) 
+    VALUES ('4160', 'Pendapatan Airport Transfer', 'REVENUE', (SELECT id FROM public.chart_of_accounts WHERE account_code = '4100'), 'CREDIT');
+    
+    INSERT INTO public.chart_of_accounts (account_code, account_name, account_type, parent_id, normal_balance) 
+    VALUES ('4170', 'Pendapatan Baggage Storage', 'REVENUE', (SELECT id FROM public.chart_of_accounts WHERE account_code = '4100'), 'CREDIT');
+    
     -- Expense accounts
     INSERT INTO public.chart_of_accounts (account_code, account_name, account_type, is_header, normal_balance) 
     VALUES ('5000', 'BEBAN', 'EXPENSE', TRUE, 'DEBIT');

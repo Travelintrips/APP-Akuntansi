@@ -150,7 +150,6 @@ export default function JournalEntryForm({ onSuccess }: JournalEntryFormProps) {
         .insert({
           date: format(values.date, "yyyy-MM-dd"),
           description: values.description.trim(),
-          account_id: values.items[0].account_id, // Add account_id to fix the not-null constraint
         })
         .select()
         .single();

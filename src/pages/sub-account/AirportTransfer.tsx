@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,6 +7,7 @@ import { useCart } from "@/context/CartContext";
 import { v4 as uuidv4 } from "uuid";
 import { useToast } from "@/components/ui/use-toast";
 import supabase from "@/lib/supabase";
+// Removed accounting imports - accounting integration disabled
 import BackButton from "@/components/common/BackButton";
 import CartButton from "@/components/cart/CartButton";
 
@@ -16,6 +17,8 @@ export default function AirportTransferPage() {
   const [formData, setFormData] = useState({
     kode_transaksi: "",
     tanggal: "",
+    nama_penumpang: "",
+    no_telepon: "",
     jenis_kendaraan: "",
     rute: "",
     tanggal_jemput: "",
@@ -33,6 +36,57 @@ export default function AirportTransferPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // Generate next airport transfer number
+  const generateNextATNumber = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("bookings_trips")
+        .select("kode_booking, created_at")
+        .like("kode_booking", "AT-%")
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (error) {
+        console.error("Error fetching latest AT booking:", error);
+        return "AT-001";
+      }
+
+      if (!data || data.length === 0) {
+        return "AT-001";
+      }
+
+      let highestNumber = 0;
+      data.forEach((booking) => {
+        const match = booking.kode_booking.match(/AT-(\d+)/);
+        if (match) {
+          const number = parseInt(match[1]);
+          if (number > highestNumber) {
+            highestNumber = number;
+          }
+        }
+      });
+
+      const nextNumber = highestNumber + 1;
+      return `AT-${nextNumber.toString().padStart(3, "0")}`;
+    } catch (error) {
+      console.error("Error generating AT number:", error);
+      return "AT-001";
+    }
+  };
+
+  // Initialize airport transfer number on component mount
+  useEffect(() => {
+    const initializeATNumber = async () => {
+      const nextATNumber = await generateNextATNumber();
+      setFormData((prev) => ({
+        ...prev,
+        kode_transaksi: nextATNumber,
+      }));
+    };
+
+    initializeATNumber();
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -73,7 +127,11 @@ export default function AirportTransferPage() {
   const handleCategorySelect = (category: string) => {
     setSelectedCategory(category);
     setSearchTerm(""); // Clear the search term when a category is selected
-    // You can also update form data based on the selected category if needed
+    // Update form data with selected category
+    setFormData((prev) => ({
+      ...prev,
+      jenis_kendaraan: category,
+    }));
   };
 
   const categories = [
@@ -89,45 +147,112 @@ export default function AirportTransferPage() {
     category.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddToCart = async () => {
+    console.log("handleAddToCart called with formData:", formData);
+
+    // Validate required fields
+    const requiredFields = {
+      kode_transaksi: "Kode Transaksi",
+      tanggal: "Tanggal Transaksi",
+      nama_penumpang: "Nama Penumpang",
+      no_telepon: "No. Telepon",
+      jenis_kendaraan: "Jenis Kendaraan",
+      rute: "Rute",
+      tanggal_jemput: "Tanggal Jemput",
+      waktu_jemput: "Waktu Jemput",
+      harga_jual: "Harga Jual",
+      harga_basic: "Harga Basic",
+      fee_sales: "Fee Sales",
+    };
+
+    const missingFields = Object.entries(requiredFields)
+      .filter(([key]) => {
+        const value = formData[key as keyof typeof formData];
+        return !value || value.toString().trim() === "";
+      })
+      .map(([, label]) => label);
+
+    if (missingFields.length > 0) {
+      console.log("Missing fields:", missingFields);
+      toast({
+        title: "Error",
+        description: `Harap isi field berikut: ${missingFields.join(", ")}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     setError(null);
-    setSuccess(false);
 
     try {
-      // Here you would typically save to your database
-      // For demonstration, we'll just log the data and show success
-      console.log("Form data submitted:", formData);
-
-      // Example of how you might save this to Supabase
-      // Uncomment and modify as needed for your schema
-      /*
-      const { error } = await supabase
-        .from('airport_transfer_transactions')
+      // Save to bookings_trips table
+      const { error: bookingError } = await supabase
+        .from("bookings_trips")
         .insert([
           {
-            kode_transaksi: formData.kode_transaksi,
+            kode_booking: formData.kode_transaksi,
+            service_type: "airport_transfer",
+            service_name: `Airport Transfer ${formData.jenis_kendaraan}`,
+            service_details: `${formData.rute} - ${formData.tanggal_jemput} ${formData.waktu_jemput}`,
+            price: parseFloat(formData.harga_jual) || 0,
+            harga_jual: parseFloat(formData.harga_jual) || 0,
+            harga_basic: parseFloat(formData.harga_basic) || 0,
+            fee_sales: parseFloat(formData.fee_sales) || 0,
+            profit: parseFloat(formData.profit) || 0,
+            quantity: 1,
+            total_amount: parseFloat(formData.harga_jual) || 0,
             tanggal: formData.tanggal,
-            jenis_kendaraan: formData.jenis_kendaraan,
-            rute: formData.rute,
-            tanggal_jemput: formData.tanggal_jemput,
-            waktu_jemput: formData.waktu_jemput,
-            jumlah_penumpang: parseInt(formData.jumlah_penumpang),
-            harga: parseFloat(formData.harga),
-            total: parseFloat(formData.total),
+            status: "confirmed",
+            nama_penumpang: formData.nama_penumpang,
+            no_telepon: parseInt(formData.no_telepon) || null,
+            tanggal_checkin: formData.tanggal_jemput,
+            jam_checkin: formData.waktu_jemput,
             keterangan: formData.keterangan,
-          }
+            additional_data: JSON.stringify({
+              jenis_kendaraan: formData.jenis_kendaraan,
+              rute: formData.rute,
+              jumlah_penumpang: formData.jumlah_penumpang,
+            }),
+          },
         ]);
-      
-      if (error) throw error;
-      */
 
-      setSuccess(true);
-      // Reset form after successful submission
+      if (bookingError) {
+        throw bookingError;
+      }
+
+      // Accounting integration removed - no journal entry created
+
+      // Add to cart
+      const newItem = {
+        id: uuidv4(),
+        type: "airport-transfer" as const,
+        name: `Airport Transfer ${formData.jenis_kendaraan}`,
+        details: `${formData.rute} - ${formData.tanggal_jemput} ${formData.waktu_jemput}`,
+        price: parseFloat(formData.harga_jual) || 0,
+        quantity: 1,
+        date: formData.tanggal,
+        kode_transaksi: formData.kode_transaksi,
+        additionalData: {
+          ...formData,
+          harga_jual: parseFloat(formData.harga_jual) || 0,
+          harga_basic: parseFloat(formData.harga_basic) || 0,
+          fee_sales: parseFloat(formData.fee_sales) || 0,
+          profit: parseFloat(formData.profit) || 0,
+          jumlah_penumpang: parseInt(formData.jumlah_penumpang) || 1,
+        },
+      };
+
+      console.log("Adding item to cart:", newItem);
+      addItem(newItem);
+
+      // Reset form after successful addition
+      const nextATNumber = await generateNextATNumber();
       setFormData({
-        kode_transaksi: "",
+        kode_transaksi: nextATNumber,
         tanggal: "",
+        nama_penumpang: "",
+        no_telepon: "",
         jenis_kendaraan: "",
         rute: "",
         tanggal_jemput: "",
@@ -141,12 +266,28 @@ export default function AirportTransferPage() {
       });
       setSelectedCategory(null);
       setSearchTerm("");
+
+      toast({
+        title: "Berhasil",
+        description: "Item berhasil ditambahkan ke keranjang dan database",
+      });
     } catch (err: any) {
-      console.error("Error submitting form:", err);
-      setError(err.message || "Terjadi kesalahan saat menyimpan data");
+      console.error("Error saving booking:", err);
+      setError(err.message || "Gagal menyimpan booking");
+      toast({
+        title: "Error",
+        description: `Gagal menyimpan booking: ${err.message}`,
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log("Form submitted, calling handleAddToCart");
+    handleAddToCart();
   };
 
   return (
@@ -238,7 +379,7 @@ export default function AirportTransferPage() {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="kode_transaksi">Kode Transaksi</Label>
@@ -265,11 +406,35 @@ export default function AirportTransferPage() {
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor="nama_penumpang">Nama Penumpang</Label>
+                  <Input
+                    id="nama_penumpang"
+                    name="nama_penumpang"
+                    value={formData.nama_penumpang}
+                    onChange={handleChange}
+                    placeholder="Nama lengkap penumpang"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="no_telepon">No. Telepon</Label>
+                  <Input
+                    id="no_telepon"
+                    name="no_telepon"
+                    value={formData.no_telepon}
+                    onChange={handleChange}
+                    placeholder="08123456789"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="jenis_kendaraan">Jenis Kendaraan</Label>
                   <Input
                     id="jenis_kendaraan"
                     name="jenis_kendaraan"
-                    value={formData.jenis_kendaraan || selectedCategory || ""}
+                    value={formData.jenis_kendaraan}
                     onChange={handleChange}
                     placeholder="Avanza"
                     required
@@ -388,69 +553,17 @@ export default function AirportTransferPage() {
               </div>
 
               <div className="pt-4 flex gap-2">
-                <Button type="submit" disabled={loading}>
-                  {loading ? "Menyimpan..." : "Simpan"}
-                </Button>
                 <Button
                   type="button"
-                  variant="outline"
-                  className="flex items-center gap-2"
-                  onClick={() => {
-                    // Validate required fields
-                    if (
-                      !formData.kode_transaksi ||
-                      !formData.tanggal ||
-                      !formData.jenis_kendaraan ||
-                      !formData.rute ||
-                      !formData.tanggal_jemput ||
-                      !formData.waktu_jemput ||
-                      !formData.harga_jual ||
-                      !formData.harga_basic ||
-                      !formData.fee_sales
-                    ) {
-                      toast({
-                        title: "Error",
-                        description: "Harap isi semua field yang diperlukan",
-                        variant: "destructive",
-                      });
-                      return;
-                    }
-
-                    // Add to cart
-                    const newItem = {
-                      id: uuidv4(),
-                      type: "airport-transfer",
-                      name: `Airport Transfer ${formData.jenis_kendaraan}`,
-                      details: `${formData.rute} - ${formData.tanggal_jemput} ${formData.waktu_jemput}`,
-                      price: parseFloat(formData.harga_jual) || 0,
-                      quantity: 1,
-                      date: formData.tanggal,
-                      kode_transaksi: formData.kode_transaksi,
-                      additionalData: {
-                        ...formData,
-                        harga_jual: parseFloat(formData.harga_jual) || 0,
-                        harga_basic: parseFloat(formData.harga_basic) || 0,
-                        fee_sales: parseFloat(formData.fee_sales) || 0,
-                        profit: parseFloat(formData.profit) || 0,
-                        jumlah_penumpang:
-                          parseInt(formData.jumlah_penumpang) || 1,
-                      },
-                    };
-
-                    console.log("Adding item to cart:", newItem);
-                    addItem(newItem);
-
-                    toast({
-                      title: "Berhasil",
-                      description: "Item berhasil ditambahkan ke keranjang",
-                    });
-                  }}
+                  onClick={handleAddToCart}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                  disabled={loading}
                 >
                   <ShoppingCart className="h-4 w-4" />
-                  Tambah ke Keranjang
+                  {loading ? "Memproses..." : "Tambah ke Keranjang"}
                 </Button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       </div>

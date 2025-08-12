@@ -3,6 +3,9 @@ CREATE TABLE IF NOT EXISTS journal_entries (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   date DATE NOT NULL,
   description TEXT NOT NULL,
+  total_debit DECIMAL(15, 2) DEFAULT 0,
+  total_credit DECIMAL(15, 2) DEFAULT 0,
+  entry_type VARCHAR(50) DEFAULT 'BOOKING_CREATED',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

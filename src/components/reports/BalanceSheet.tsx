@@ -26,6 +26,22 @@ interface BalanceSheetItem {
   balance: number;
 }
 
+interface ProfitLossSummary {
+  period: string;
+  total_income: number;
+  total_expense: number;
+  net: number;
+}
+
+interface TrialBalanceItem {
+  account_code: string;
+  account_name: string;
+  debit: number;
+  credit: number;
+  closing_balance: number;
+  period: string;
+}
+
 export default function BalanceSheet() {
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [isLoading, setIsLoading] = useState(false);
@@ -46,6 +62,12 @@ export default function BalanceSheet() {
     totalEquity: 0,
   });
 
+  const [profitLossData, setProfitLossData] =
+    useState<ProfitLossSummary | null>(null);
+  const [trialBalanceData, setTrialBalanceData] = useState<TrialBalanceItem[]>(
+    [],
+  );
+
   useEffect(() => {
     if (date) {
       fetchBalanceSheetData();
@@ -60,57 +82,133 @@ export default function BalanceSheet() {
 
     try {
       const formattedDate = format(date, "yyyy-MM-dd");
+      const period = format(date, "yyyy-MM");
 
-      // Fetch assets
-      const { data: assetsData, error: assetsError } = await supabase
-        .from("chart_of_accounts")
-        .select("account_type, account_code, account_name, balance_total")
-        .eq("account_type", "Aset")
-        .not("is_header", "eq", true)
-        .order("account_code");
+      // Try to fetch from balance_sheet_view first, fallback to chart_of_accounts
+      const { data: balanceSheetViewData, error: balanceSheetViewError } =
+        await supabase
+          .from("balance_sheet_view")
+          .select("*")
+          .eq("period", period);
 
-      if (assetsError) throw assetsError;
+      let assetsData, liabilitiesData, equityData;
 
-      // Fetch liabilities
-      const { data: liabilitiesData, error: liabilitiesError } = await supabase
-        .from("chart_of_accounts")
-        .select("account_type, account_code, account_name, balance_total")
-        .eq("account_type", "Kewajiban")
-        .not("is_header", "eq", true)
-        .order("account_code");
+      if (balanceSheetViewData && balanceSheetViewData.length > 0) {
+        // Use data from balance_sheet_view
+        console.log("Using balance_sheet_view data:", balanceSheetViewData);
 
-      if (liabilitiesError) throw liabilitiesError;
+        assetsData = balanceSheetViewData.filter(
+          (item) => item.account_type === "Aset",
+        );
+        liabilitiesData = balanceSheetViewData.filter(
+          (item) => item.account_type === "Kewajiban",
+        );
+        equityData = balanceSheetViewData.filter(
+          (item) => item.account_type === "Modal",
+        );
+      } else {
+        // Fallback to chart_of_accounts with balance_total
+        console.log("Fallback to chart_of_accounts");
 
-      // Fetch equity
-      const { data: equityData, error: equityError } = await supabase
-        .from("chart_of_accounts")
-        .select("account_type, account_code, account_name, balance_total")
-        .eq("account_type", "Modal")
-        .not("is_header", "eq", true)
-        .order("account_code");
+        const { data: assetsDataFallback, error: assetsError } = await supabase
+          .from("chart_of_accounts")
+          .select("account_type, account_code, account_name, balance_total")
+          .eq("account_type", "Aset")
+          .eq("is_header", false)
+          .order("account_code");
 
-      if (equityError) throw equityError;
+        if (assetsError) {
+          console.error("Assets error:", assetsError);
+          throw assetsError;
+        }
 
-      // Calculate totals
-      const assets = assetsData.map((item) => ({
+        const { data: liabilitiesDataFallback, error: liabilitiesError } =
+          await supabase
+            .from("chart_of_accounts")
+            .select("account_type, account_code, account_name, balance_total")
+            .eq("account_type", "Kewajiban")
+            .eq("is_header", false)
+            .order("account_code");
+
+        if (liabilitiesError) {
+          console.error("Liabilities error:", liabilitiesError);
+          throw liabilitiesError;
+        }
+
+        const { data: equityDataFallback, error: equityError } = await supabase
+          .from("chart_of_accounts")
+          .select("account_type, account_code, account_name, balance_total")
+          .eq("account_type", "Modal")
+          .eq("is_header", false)
+          .order("account_code");
+
+        if (equityError) {
+          console.error("Equity error:", equityError);
+          throw equityError;
+        }
+
+        assetsData = assetsDataFallback;
+        liabilitiesData = liabilitiesDataFallback;
+        equityData = equityDataFallback;
+      }
+
+      // Fetch profit loss summary
+      const { data: profitLossData, error: profitLossError } = await supabase
+        .from("profit_loss_summary_view")
+        .select("*")
+        .eq("period", period)
+        .single();
+
+      if (profitLossError && profitLossError.code !== "PGRST116") {
+        console.error("Profit Loss error:", profitLossError);
+      }
+
+      // Fetch trial balance
+      const { data: trialBalanceData, error: trialBalanceError } =
+        await supabase
+          .from("trial_balance_view")
+          .select("*")
+          .eq("period", period)
+          .order("account_code");
+
+      if (trialBalanceError) {
+        console.error("Trial Balance error:", trialBalanceError);
+      }
+
+      console.log("Raw data:", {
+        assetsData,
+        liabilitiesData,
+        equityData,
+        profitLossData,
+        trialBalanceData,
+      });
+
+      // Calculate totals - handle both balance_sheet_view and chart_of_accounts data
+      const assets = (assetsData || []).map((item) => ({
         account_type: item.account_type,
         account_code: item.account_code,
         account_name: item.account_name,
-        balance: item.balance_total || 0,
+        balance:
+          Number(item.balance || item.balance_total || item.current_balance) ||
+          0,
       }));
 
-      const liabilities = liabilitiesData.map((item) => ({
+      const liabilities = (liabilitiesData || []).map((item) => ({
         account_type: item.account_type,
         account_code: item.account_code,
         account_name: item.account_name,
-        balance: item.balance_total || 0,
+        balance:
+          Number(item.balance || item.balance_total || item.current_balance) ||
+          0,
       }));
 
-      const equity = equityData.map((item) => ({
+      const equity = (equityData || []).map((item) => ({
         account_type: item.account_type,
         account_code: item.account_code,
         account_name: item.account_name,
-        balance: item.balance_total || 0,
+        balance:
+          Number(item.balance || item.balance_total || item.current_balance) ||
+          0,
       }));
 
       const totalAssets = assets.reduce((sum, item) => sum + item.balance, 0);
@@ -120,6 +218,15 @@ export default function BalanceSheet() {
       );
       const totalEquity = equity.reduce((sum, item) => sum + item.balance, 0);
 
+      console.log("Processed data:", {
+        assets,
+        liabilities,
+        equity,
+        totalAssets,
+        totalLiabilities,
+        totalEquity,
+      });
+
       setBalanceSheetData({
         assets,
         liabilities,
@@ -128,9 +235,32 @@ export default function BalanceSheet() {
         totalLiabilities,
         totalEquity,
       });
+
+      // Set profit loss data
+      if (profitLossData) {
+        setProfitLossData({
+          period: profitLossData.period || period,
+          total_income: Number(profitLossData.total_income) || 0,
+          total_expense: Number(profitLossData.total_expense) || 0,
+          net: Number(profitLossData.net) || 0,
+        });
+      } else {
+        setProfitLossData(null);
+      }
+
+      // Set trial balance data
+      const processedTrialBalance = (trialBalanceData || []).map((item) => ({
+        account_code: item.account_code || "",
+        account_name: item.account_name || "",
+        debit: Number(item.debit) || 0,
+        credit: Number(item.credit) || 0,
+        closing_balance: Number(item.closing_balance) || 0,
+        period: item.period || period,
+      }));
+      setTrialBalanceData(processedTrialBalance);
     } catch (err: any) {
       console.error("Error fetching balance sheet data:", err);
-      setError("Gagal memuat data neraca");
+      setError(`Gagal memuat data neraca: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -138,6 +268,9 @@ export default function BalanceSheet() {
 
   // Format currency
   const formatCurrency = (amount: number) => {
+    if (amount === null || amount === undefined) {
+      return "0,00";
+    }
     return amount.toLocaleString("id-ID", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -152,7 +285,7 @@ export default function BalanceSheet() {
     return (
       <>
         <TableRow className="bg-muted/50">
-          <TableCell colSpan={2} className="font-bold">
+          <TableCell colSpan={3} className="font-bold">
             {title}
           </TableCell>
           <TableCell className="text-right font-bold">
@@ -170,7 +303,7 @@ export default function BalanceSheet() {
           </TableRow>
         ))}
         <TableRow>
-          <TableCell colSpan={3} className="h-2"></TableCell>
+          <TableCell colSpan={4} className="h-2"></TableCell>
         </TableRow>
       </>
     );
@@ -180,7 +313,7 @@ export default function BalanceSheet() {
     <div className="space-y-6 bg-background p-6 rounded-lg border">
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-medium">Neraca (Balance Sheet)</h3>
+          <h3 className="text-lg font-medium">Laporan Keuangan Lengkap</h3>
           <p className="text-sm text-muted-foreground">
             {date
               ? `Per tanggal ${format(date, "dd MMMM yyyy")}`
@@ -221,60 +354,180 @@ export default function BalanceSheet() {
         </div>
       )}
 
-      <div className="rounded-md border overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[100px]">Kode</TableHead>
-              <TableHead>Nama Akun</TableHead>
-              <TableHead>Tipe Akun</TableHead>
-              <TableHead className="text-right">Saldo</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
+      {/* Balance Sheet Section */}
+      <div className="space-y-4">
+        <h4 className="text-lg font-semibold">Neraca (Balance Sheet)</h4>
+        <div className="rounded-md border overflow-hidden">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell
-                  colSpan={3}
-                  className="text-center py-6 text-muted-foreground"
-                >
-                  Memuat data...
-                </TableCell>
+                <TableHead className="w-[100px]">Kode</TableHead>
+                <TableHead>Nama Akun</TableHead>
+                <TableHead>Tipe Akun</TableHead>
+                <TableHead className="text-right">Saldo</TableHead>
               </TableRow>
-            ) : (
-              <>
-                {renderAccountSection(
-                  "ASET",
-                  balanceSheetData.assets,
-                  balanceSheetData.totalAssets,
-                )}
-                {renderAccountSection(
-                  "KEWAJIBAN",
-                  balanceSheetData.liabilities,
-                  balanceSheetData.totalLiabilities,
-                )}
-                {renderAccountSection(
-                  "EKUITAS",
-                  balanceSheetData.equity,
-                  balanceSheetData.totalEquity,
-                )}
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={4}
+                    className="text-center py-6 text-muted-foreground"
+                  >
+                    Memuat data...
+                  </TableCell>
+                </TableRow>
+              ) : (
+                <>
+                  {renderAccountSection(
+                    "ASET",
+                    balanceSheetData.assets,
+                    balanceSheetData.totalAssets,
+                  )}
+                  {renderAccountSection(
+                    "KEWAJIBAN",
+                    balanceSheetData.liabilities,
+                    balanceSheetData.totalLiabilities,
+                  )}
+                  {renderAccountSection(
+                    "EKUITAS",
+                    balanceSheetData.equity,
+                    balanceSheetData.totalEquity,
+                  )}
 
+                  <TableRow className="bg-primary/10">
+                    <TableCell colSpan={3} className="font-bold">
+                      TOTAL KEWAJIBAN & EKUITAS
+                    </TableCell>
+                    <TableCell className="text-right font-bold">
+                      {formatCurrency(
+                        balanceSheetData.totalLiabilities +
+                          balanceSheetData.totalEquity,
+                      )}
+                    </TableCell>
+                  </TableRow>
+                </>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      {/* Profit Loss Summary Section */}
+      {profitLossData && (
+        <div className="space-y-4">
+          <h4 className="text-lg font-semibold">Ringkasan Laba Rugi</h4>
+          <div className="rounded-md border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Keterangan</TableHead>
+                  <TableHead className="text-right">Jumlah</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow>
+                  <TableCell className="font-medium">
+                    Total Pendapatan
+                  </TableCell>
+                  <TableCell className="text-right text-green-600">
+                    {formatCurrency(profitLossData.total_income)}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell className="font-medium">Total Beban</TableCell>
+                  <TableCell className="text-right text-red-600">
+                    {formatCurrency(profitLossData.total_expense)}
+                  </TableCell>
+                </TableRow>
+                <TableRow className="bg-muted/50">
+                  <TableCell className="font-bold">Laba/Rugi Bersih</TableCell>
+                  <TableCell
+                    className={cn(
+                      "text-right font-bold",
+                      profitLossData.net >= 0
+                        ? "text-green-600"
+                        : "text-red-600",
+                    )}
+                  >
+                    {formatCurrency(profitLossData.net)}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
+
+      {/* Trial Balance Section */}
+      {trialBalanceData.length > 0 && (
+        <div className="space-y-4">
+          <h4 className="text-lg font-semibold">
+            Neraca Saldo (Trial Balance)
+          </h4>
+          <div className="rounded-md border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[100px]">Kode</TableHead>
+                  <TableHead>Nama Akun</TableHead>
+                  <TableHead className="text-right">Debit</TableHead>
+                  <TableHead className="text-right">Kredit</TableHead>
+                  <TableHead className="text-right">Saldo Akhir</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {trialBalanceData.map((item, index) => (
+                  <TableRow key={index}>
+                    <TableCell className="w-[100px]">
+                      {item.account_code}
+                    </TableCell>
+                    <TableCell>{item.account_name}</TableCell>
+                    <TableCell className="text-right">
+                      {item.debit > 0 ? formatCurrency(item.debit) : "-"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {item.credit > 0 ? formatCurrency(item.credit) : "-"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatCurrency(item.closing_balance)}
+                    </TableCell>
+                  </TableRow>
+                ))}
                 <TableRow className="bg-primary/10">
                   <TableCell colSpan={2} className="font-bold">
-                    TOTAL KEWAJIBAN & EKUITAS
+                    TOTAL
                   </TableCell>
                   <TableCell className="text-right font-bold">
                     {formatCurrency(
-                      balanceSheetData.totalLiabilities +
-                        balanceSheetData.totalEquity,
+                      trialBalanceData.reduce(
+                        (sum, item) => sum + item.debit,
+                        0,
+                      ),
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right font-bold">
+                    {formatCurrency(
+                      trialBalanceData.reduce(
+                        (sum, item) => sum + item.credit,
+                        0,
+                      ),
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right font-bold">
+                    {formatCurrency(
+                      trialBalanceData.reduce(
+                        (sum, item) => sum + item.closing_balance,
+                        0,
+                      ),
                     )}
                   </TableCell>
                 </TableRow>
-              </>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

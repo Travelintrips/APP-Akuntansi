@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Car, ShoppingCart } from "lucide-react";
 import supabase from "@/lib/supabase";
+// Removed accounting imports - accounting integration disabled
 import { useCart } from "@/context/CartContext";
 import { v4 as uuidv4 } from "uuid";
 import { useToast } from "@/components/ui/use-toast";
@@ -16,6 +17,8 @@ export default function RentalCarPage() {
   const [formData, setFormData] = useState({
     kode_transaksi: "",
     tanggal: "",
+    nama_penumpang: "",
+    no_telepon: "",
     jenis_kendaraan: "",
     nomor_plat: "",
     tanggal_mulai: "",
@@ -31,6 +34,57 @@ export default function RentalCarPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Generate next rental car number
+  const generateNextRCNumber = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("bookings_trips")
+        .select("kode_booking, created_at")
+        .like("kode_booking", "RC-%")
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (error) {
+        console.error("Error fetching latest RC booking:", error);
+        return "RC-001";
+      }
+
+      if (!data || data.length === 0) {
+        return "RC-001";
+      }
+
+      let highestNumber = 0;
+      data.forEach((booking) => {
+        const match = booking.kode_booking.match(/RC-(\d+)/);
+        if (match) {
+          const number = parseInt(match[1]);
+          if (number > highestNumber) {
+            highestNumber = number;
+          }
+        }
+      });
+
+      const nextNumber = highestNumber + 1;
+      return `RC-${nextNumber.toString().padStart(3, "0")}`;
+    } catch (error) {
+      console.error("Error generating RC number:", error);
+      return "RC-001";
+    }
+  };
+
+  // Initialize rental car number on component mount
+  useEffect(() => {
+    const initializeRCNumber = async () => {
+      const nextRCNumber = await generateNextRCNumber();
+      setFormData((prev) => ({
+        ...prev,
+        kode_transaksi: nextRCNumber,
+      }));
+    };
+
+    initializeRCNumber();
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -83,6 +137,8 @@ export default function RentalCarPage() {
     if (
       !formData.kode_transaksi ||
       !formData.tanggal ||
+      !formData.nama_penumpang ||
+      !formData.no_telepon ||
       !formData.jenis_kendaraan ||
       !formData.nomor_plat ||
       !formData.tanggal_mulai ||
@@ -164,7 +220,8 @@ export default function RentalCarPage() {
                     onChange={handleChange}
                     placeholder="RC-001"
                     required
-                    className="tosca-emboss"
+                    readOnly
+                    className="tosca-emboss bg-muted"
                   />
                 </div>
 
@@ -176,6 +233,32 @@ export default function RentalCarPage() {
                     type="date"
                     value={formData.tanggal}
                     onChange={handleChange}
+                    required
+                    className="tosca-emboss"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="nama_penumpang">Nama Penumpang</Label>
+                  <Input
+                    id="nama_penumpang"
+                    name="nama_penumpang"
+                    value={formData.nama_penumpang}
+                    onChange={handleChange}
+                    placeholder="Nama lengkap penumpang"
+                    required
+                    className="tosca-emboss"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="no_telepon">No. Telepon</Label>
+                  <Input
+                    id="no_telepon"
+                    name="no_telepon"
+                    value={formData.no_telepon}
+                    onChange={handleChange}
+                    placeholder="08123456789"
                     required
                     className="tosca-emboss"
                   />
@@ -316,7 +399,7 @@ export default function RentalCarPage() {
               <div className="pt-6 flex gap-2">
                 <Button
                   type="button"
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.preventDefault();
                     // Validate required fields
                     if (
@@ -334,69 +417,114 @@ export default function RentalCarPage() {
                       return;
                     }
 
-                    // Calculate total price
-                    const hargaJual = parseFloat(formData.harga_jual) || 0;
-                    const jumlahHari = parseInt(formData.jumlah_hari) || 1;
-                    const totalPrice = hargaJual * jumlahHari;
+                    try {
+                      // Calculate total price
+                      const hargaJual = parseFloat(formData.harga_jual) || 0;
+                      const jumlahHari = parseInt(formData.jumlah_hari) || 1;
+                      const totalPrice = hargaJual * jumlahHari;
 
-                    // Add to cart
-                    addItem({
-                      id: uuidv4(),
-                      type: "rental-car",
-                      name: `Rental ${formData.jenis_kendaraan} (${formData.nomor_plat})`,
-                      details: `${jumlahHari} hari, ${formData.tanggal_mulai} s/d ${formData.tanggal_selesai}`,
-                      price: totalPrice,
-                      quantity: 1,
-                      date: formData.tanggal,
-                      kode_transaksi: formData.kode_transaksi,
-                      additionalData: { ...formData },
-                    });
+                      // Save to bookings_trips table
+                      const { error: bookingError } = await supabase
+                        .from("bookings_trips")
+                        .insert([
+                          {
+                            kode_booking: formData.kode_transaksi,
+                            service_type: "rental_car",
+                            service_name: `Rental ${formData.jenis_kendaraan} (${formData.nomor_plat})`,
+                            service_details: `${jumlahHari} hari, ${formData.tanggal_mulai} s/d ${formData.tanggal_selesai}`,
+                            price: hargaJual,
+                            harga_jual: hargaJual,
+                            harga_basic: parseFloat(formData.harga_basic) || 0,
+                            fee_sales: parseFloat(formData.fee_sales) || 0,
+                            profit: parseFloat(formData.profit) || 0,
+                            quantity: 1,
+                            total_amount: totalPrice,
+                            tanggal: formData.tanggal,
+                            status: "confirmed",
+                            nama_penumpang: formData.nama_penumpang,
+                            no_telepon: parseInt(formData.no_telepon) || null,
+                            keterangan: formData.keterangan,
+                            additional_data: JSON.stringify({
+                              jenis_kendaraan: formData.jenis_kendaraan,
+                              nomor_plat: formData.nomor_plat,
+                              tanggal_mulai: formData.tanggal_mulai,
+                              tanggal_selesai: formData.tanggal_selesai,
+                              jumlah_hari: jumlahHari,
+                            }),
+                          },
+                        ]);
 
-                    // Show success message
-                    setSuccess(true);
+                      if (bookingError) {
+                        throw bookingError;
+                      }
 
-                    // Reset form
-                    setFormData({
-                      kode_transaksi: "",
-                      tanggal: "",
-                      jenis_kendaraan: "",
-                      nomor_plat: "",
-                      tanggal_mulai: "",
-                      tanggal_selesai: "",
-                      harga_jual: "",
-                      harga_basic: "",
-                      fee_sales: "",
-                      profit: "",
-                      jumlah_hari: "1",
-                      keterangan: "",
-                    });
+                      // Accounting integration removed - no journal entry created
 
-                    toast({
-                      title: "Ditambahkan ke keranjang",
-                      description: (
-                        <div className="flex flex-col gap-2">
-                          <div>
-                            {formData.jenis_kendaraan} ({formData.nomor_plat})
-                            berhasil ditambahkan ke keranjang.
+                      // Add to cart
+                      addItem({
+                        id: uuidv4(),
+                        type: "rental-car",
+                        name: `Rental ${formData.jenis_kendaraan} (${formData.nomor_plat})`,
+                        details: `${jumlahHari} hari, ${formData.tanggal_mulai} s/d ${formData.tanggal_selesai}`,
+                        price: totalPrice,
+                        quantity: 1,
+                        date: formData.tanggal,
+                        kode_transaksi: formData.kode_transaksi,
+                        additionalData: { ...formData },
+                      });
+
+                      // Show success message
+                      setSuccess(true);
+
+                      // Reset form
+                      const nextRCNumber = await generateNextRCNumber();
+                      setFormData({
+                        kode_transaksi: nextRCNumber,
+                        tanggal: "",
+                        nama_penumpang: "",
+                        no_telepon: "",
+                        jenis_kendaraan: "",
+                        nomor_plat: "",
+                        tanggal_mulai: "",
+                        tanggal_selesai: "",
+                        harga_jual: "",
+                        harga_basic: "",
+                        fee_sales: "",
+                        profit: "",
+                        jumlah_hari: "1",
+                        keterangan: "",
+                      });
+
+                      toast({
+                        title: "Ditambahkan ke keranjang",
+                        description: (
+                          <div className="flex flex-col gap-2">
+                            <div>
+                              {formData.jenis_kendaraan} ({formData.nomor_plat})
+                              berhasil ditambahkan ke keranjang dan database.
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="self-end"
+                              onClick={() => {
+                                const closeToast = document.querySelector(
+                                  "[data-radix-toast-close]",
+                                );
+                                if (closeToast instanceof HTMLElement) {
+                                  closeToast.click();
+                                }
+                              }}
+                            >
+                              Tutup
+                            </Button>
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="self-end"
-                            onClick={() => {
-                              const closeToast = document.querySelector(
-                                "[data-radix-toast-close]",
-                              );
-                              if (closeToast instanceof HTMLElement) {
-                                closeToast.click();
-                              }
-                            }}
-                          >
-                            Tutup
-                          </Button>
-                        </div>
-                      ),
-                    });
+                        ),
+                      });
+                    } catch (err: any) {
+                      console.error("Error saving booking:", err);
+                      setError(`Gagal menyimpan booking: ${err.message}`);
+                    }
                   }}
                   className="flex items-center gap-2 h-12 text-base font-medium rounded-lg transition-all duration-200 hover:scale-[1.02] w-full tosca-emboss-button"
                 >

@@ -38,9 +38,22 @@ const AuthForm = ({
 
       // Handle successful sign in
       setSuccessMessage("Sign in successful! Redirecting...");
+
+      // Get user profile to determine redirect destination
+      const { data: profile } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", data.user.id)
+        .single();
+
       setTimeout(() => {
         onAuthSuccess();
-        navigate("/dashboard");
+        // Redirect based on user role
+        if (profile?.role === "staff_trips") {
+          navigate("/transaction-reports");
+        } else {
+          navigate("/dashboard");
+        }
       }, 1000);
     } catch (err: any) {
       setError(err.message || "Failed to sign in");
@@ -93,7 +106,7 @@ const AuthForm = ({
       <div className="mb-6 text-center">
         <h1 className="text-2xl font-bold tracking-tight">Welcome</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Sign in to your account or create a new one
+          Sign in to your account
         </p>
       </div>
 
@@ -103,59 +116,7 @@ const AuthForm = ({
         </div>
       )}
 
-      <Tabs
-        defaultValue={activeTab}
-        value={activeTab}
-        onValueChange={(value) => {
-          setActiveTab(value as "signin" | "signup");
-          setError(null);
-          setSuccessMessage(null);
-        }}
-        className="w-full"
-      >
-        <TabsList className="grid grid-cols-2 w-full mb-6">
-          <TabsTrigger value="signin">Sign In</TabsTrigger>
-          <TabsTrigger value="signup">Sign Up</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="signin">
-          <SignInForm
-            onSubmit={handleSignIn}
-            isLoading={isLoading}
-            error={error}
-          />
-          <div className="mt-4 text-center text-sm">
-            <p className="text-muted-foreground">
-              Don't have an account?{" "}
-              <button
-                onClick={() => setActiveTab("signup")}
-                className="text-primary hover:underline font-medium"
-              >
-                Sign Up
-              </button>
-            </p>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="signup">
-          <SignUpForm
-            onSubmit={handleSignUp}
-            isLoading={isLoading}
-            onSwitchToSignIn={() => setActiveTab("signin")}
-          />
-          <div className="mt-4 text-center text-sm">
-            <p className="text-muted-foreground">
-              Already have an account?{" "}
-              <button
-                onClick={() => setActiveTab("signin")}
-                className="text-primary hover:underline font-medium"
-              >
-                Sign In
-              </button>
-            </p>
-          </div>
-        </TabsContent>
-      </Tabs>
+      <SignInForm onSubmit={handleSignIn} isLoading={isLoading} error={error} />
     </div>
   );
 };

@@ -20,21 +20,23 @@ import { format } from "date-fns";
 import { ChartOfAccount } from "@/components/coa/COAList";
 import supabase from "@/lib/supabase";
 
-interface GeneralLedgerEntry {
+interface LedgerSummaryEntry {
   id: string;
-  account_id: string;
-  date: string;
-  description: string;
-  debit: number;
-  credit: number;
-  balance: number;
-  created_at: string;
+  account_code: string;
+  account_name: string;
+  period: string;
+  total_debit: number | null;
+  total_credit: number | null;
+  opening_balance: number | null;
+  closing_balance: number | null;
+  ending_balance: number | null;
+  item_created_at: string | null;
 }
 
 export default function GeneralLedgerDisplay() {
   const [accounts, setAccounts] = useState<ChartOfAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
-  const [ledgerEntries, setLedgerEntries] = useState<GeneralLedgerEntry[]>([]);
+  const [ledgerEntries, setLedgerEntries] = useState<LedgerSummaryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,6 +79,9 @@ export default function GeneralLedgerDisplay() {
 
   // Format currency
   const formatCurrency = (amount: number) => {
+    if (amount === null || amount === undefined) {
+      return "0,00";
+    }
     return amount.toLocaleString("id-ID", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -93,12 +98,18 @@ export default function GeneralLedgerDisplay() {
 
   const fetchLedgerEntries = async (accountId: string) => {
     try {
+      // Get the selected account to match by account_code
+      const selectedAccount = accounts.find((acc) => acc.id === accountId);
+      if (!selectedAccount) {
+        throw new Error("Account not found");
+      }
+
       const { data, error } = await supabase
-        .from("general_ledger")
+        .from("ledger_summaries")
         .select("*")
-        .eq("account_id", accountId)
-        .order("date", { ascending: true })
-        .order("created_at", { ascending: true });
+        .eq("account_code", selectedAccount.account_code)
+        .order("period", { ascending: true })
+        .order("item_created_at", { ascending: true });
 
       if (error) throw error;
       setLedgerEntries(data || []);
@@ -174,11 +185,11 @@ export default function GeneralLedgerDisplay() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[100px]">Tanggal</TableHead>
-                  <TableHead>Deskripsi</TableHead>
-                  <TableHead className="text-right">Debit</TableHead>
-                  <TableHead className="text-right">Kredit</TableHead>
-                  <TableHead className="text-right">Saldo</TableHead>
+                  <TableHead className="w-[100px]">Periode</TableHead>
+                  <TableHead>Saldo Awal</TableHead>
+                  <TableHead className="text-right">Total Debit</TableHead>
+                  <TableHead className="text-right">Total Kredit</TableHead>
+                  <TableHead className="text-right">Saldo Akhir</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -197,27 +208,32 @@ export default function GeneralLedgerDisplay() {
                       colSpan={5}
                       className="text-center py-6 text-muted-foreground"
                     >
-                      Belum ada transaksi untuk akun ini
+                      Belum ada data ringkasan untuk akun ini
                     </TableCell>
                   </TableRow>
                 ) : (
                   ledgerEntries.map((entry) => (
                     <TableRow key={entry.id}>
-                      <TableCell>
-                        {format(new Date(entry.date), "dd/MM/yyyy")}
-                      </TableCell>
-                      <TableCell>
-                        {entry.manual_entry ? "🖊️ " : ""}
-                        {entry.description}
+                      <TableCell>{entry.period}</TableCell>
+                      <TableCell className="text-right">
+                        {entry.opening_balance
+                          ? formatCurrency(entry.opening_balance)
+                          : "0,00"}
                       </TableCell>
                       <TableCell className="text-right">
-                        {entry.debit > 0 ? formatCurrency(entry.debit) : "-"}
+                        {entry.total_debit
+                          ? formatCurrency(entry.total_debit)
+                          : "0,00"}
                       </TableCell>
                       <TableCell className="text-right">
-                        {entry.credit > 0 ? formatCurrency(entry.credit) : "-"}
+                        {entry.total_credit
+                          ? formatCurrency(entry.total_credit)
+                          : "0,00"}
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatCurrency(entry.balance)}
+                        {entry.closing_balance
+                          ? formatCurrency(entry.closing_balance)
+                          : "0,00"}
                       </TableCell>
                     </TableRow>
                   ))

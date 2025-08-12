@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Hotel, ShoppingCart } from "lucide-react";
 import supabase from "@/lib/supabase";
-import { createJournalEntryFromSubAccount } from "@/lib/journalEntries";
+// Removed accounting imports - accounting integration disabled
 import { useCart } from "@/context/CartContext";
 import { v4 as uuidv4 } from "uuid";
 import { toast } from "@/components/ui/use-toast";
@@ -15,7 +15,9 @@ export default function HotelPage() {
   const { addItem } = useCart();
   const [formData, setFormData] = useState({
     kode_transaksi: "",
-    tanggal: "",
+    tanggal: new Date().toISOString().split("T")[0], // Default to today
+    nama_penumpang: "",
+    no_telepon: "",
     nama_hotel: "",
     lokasi: "",
     tanggal_checkin: "",
@@ -32,6 +34,57 @@ export default function HotelPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Generate next hotel booking number
+  const generateNextHotelNumber = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("bookings_trips")
+        .select("kode_booking, created_at")
+        .like("kode_booking", "HTL-%")
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (error) {
+        console.error("Error fetching latest hotel booking:", error);
+        return "HTL-001";
+      }
+
+      if (!data || data.length === 0) {
+        return "HTL-001";
+      }
+
+      let highestNumber = 0;
+      data.forEach((booking) => {
+        const match = booking.kode_booking.match(/HTL-(\d+)/);
+        if (match) {
+          const number = parseInt(match[1]);
+          if (number > highestNumber) {
+            highestNumber = number;
+          }
+        }
+      });
+
+      const nextNumber = highestNumber + 1;
+      return `HTL-${nextNumber.toString().padStart(3, "0")}`;
+    } catch (error) {
+      console.error("Error generating hotel number:", error);
+      return "HTL-001";
+    }
+  };
+
+  // Initialize hotel number on component mount
+  useEffect(() => {
+    const initializeHotelNumber = async () => {
+      const nextHotelNumber = await generateNextHotelNumber();
+      setFormData((prev) => ({
+        ...prev,
+        kode_transaksi: nextHotelNumber,
+      }));
+    };
+
+    initializeHotelNumber();
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -210,6 +263,32 @@ export default function HotelPage() {
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor="nama_penumpang">Nama Penumpang</Label>
+                  <Input
+                    id="nama_penumpang"
+                    name="nama_penumpang"
+                    value={formData.nama_penumpang}
+                    onChange={handleChange}
+                    placeholder="Nama lengkap penumpang"
+                    required
+                    className="tosca-emboss"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="no_telepon">No. Telepon</Label>
+                  <Input
+                    id="no_telepon"
+                    name="no_telepon"
+                    value={formData.no_telepon}
+                    onChange={handleChange}
+                    placeholder="08123456789"
+                    required
+                    className="tosca-emboss"
+                  />
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="nama_hotel">Nama Hotel</Label>
                   <Input
                     id="nama_hotel"
@@ -359,7 +438,7 @@ export default function HotelPage() {
                 <Button
                   type="button"
                   className="tosca-emboss-button flex items-center gap-2 w-full h-12 text-base font-medium rounded-lg transition-all duration-200 hover:scale-[1.02]"
-                  onClick={() => {
+                  onClick={async () => {
                     // Validate form data
                     if (
                       !formData.kode_transaksi ||
@@ -377,41 +456,60 @@ export default function HotelPage() {
                       return;
                     }
 
-                    // Calculate total amount
-                    const totalAmount =
-                      parseFloat(formData.harga_jual) *
-                      parseInt(formData.jumlah_kamar) *
-                      parseInt(formData.total_malam);
+                    try {
+                      // Calculate total amount
+                      const totalAmount =
+                        parseFloat(formData.harga_jual) *
+                        parseInt(formData.jumlah_kamar) *
+                        parseInt(formData.total_malam);
 
-                    // Add to cart
-                    addItem({
-                      id: uuidv4(),
-                      type: "hotel",
-                      name: `Hotel ${formData.nama_hotel}`,
-                      details: `${formData.lokasi} - ${formData.jumlah_kamar} kamar, ${formData.total_malam} malam`,
-                      price: parseFloat(formData.harga_jual),
-                      quantity: parseInt(formData.jumlah_kamar),
-                      date: formData.tanggal,
-                      kode_transaksi: formData.kode_transaksi,
-                      additionalData: {
-                        ...formData,
-                        harga_jual: parseFloat(formData.harga_jual),
-                        harga_basic: parseFloat(formData.harga_basic),
-                        fee_sales: parseFloat(formData.fee_sales),
-                        profit: parseFloat(formData.profit),
-                        jumlah_kamar: parseInt(formData.jumlah_kamar),
-                        total_malam: parseInt(formData.total_malam),
-                        totalAmount: totalAmount,
-                      },
-                    });
+                      // Accounting integration removed - no journal entry created
 
-                    // Show receipt
-                    setSuccess(true);
+                      // Add to cart only (database save handled in CartContext)
+                      await addItem({
+                        id: uuidv4(),
+                        type: "hotel",
+                        name: `Hotel ${formData.nama_hotel}`,
+                        details: `${formData.lokasi} - ${formData.jumlah_kamar} kamar, ${formData.total_malam} malam`,
+                        price: parseFloat(formData.harga_jual),
+                        quantity: parseInt(formData.jumlah_kamar),
+                        date: formData.tanggal,
+                        kode_transaksi: formData.kode_transaksi,
+                        additionalData: {
+                          ...formData,
+                          service_type: "hotel",
+                          nama_penumpang: formData.nama_penumpang,
+                          no_telepon: formData.no_telepon,
+                          tanggal_checkin: formData.tanggal_checkin,
+                          tanggal_checkout: formData.tanggal_checkout,
+                          tanggal_mulai: formData.tanggal_checkin,
+                          tanggal_selesai: formData.tanggal_checkout,
+                          harga_jual: parseFloat(formData.harga_jual),
+                          harga_basic: parseFloat(formData.harga_basic) || 0,
+                          fee_sales: parseFloat(formData.fee_sales) || 0,
+                          profit: parseFloat(formData.profit) || 0,
+                          jumlah_kamar: parseInt(formData.jumlah_kamar),
+                          total_malam: parseInt(formData.total_malam),
+                          jumlah_malam: parseInt(formData.total_malam),
+                          totalAmount: totalAmount,
+                        },
+                      });
 
-                    toast({
-                      title: "Berhasil ditambahkan",
-                      description: `Hotel ${formData.nama_hotel} (${formData.lokasi}) telah ditambahkan ke keranjang`,
-                    });
+                      // Show receipt
+                      setSuccess(true);
+
+                      toast({
+                        title: "Berhasil ditambahkan",
+                        description: `Hotel ${formData.nama_hotel} (${formData.lokasi}) telah ditambahkan ke keranjang`,
+                      });
+                    } catch (err: any) {
+                      console.error("Error saving booking:", err);
+                      toast({
+                        title: "Error",
+                        description: `Gagal menyimpan booking: ${err.message}`,
+                        variant: "destructive",
+                      });
+                    }
                   }}
                 >
                   <ShoppingCart className="h-4 w-4" />

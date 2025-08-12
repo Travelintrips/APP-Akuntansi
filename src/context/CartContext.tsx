@@ -5,6 +5,7 @@ import {
   useEffect,
   ReactNode,
 } from "react";
+import supabase from "@/lib/supabase";
 
 // Define the cart item interface
 export interface CartItem {
@@ -15,7 +16,8 @@ export interface CartItem {
     | "passenger-handling"
     | "travel"
     | "airport-transfer"
-    | "rental-car";
+    | "rental-car"
+    | "baggage-storage";
   name: string;
   details: string;
   price: number;
@@ -27,7 +29,7 @@ export interface CartItem {
 
 interface CartContextType {
   items: CartItem[];
-  addItem: (item: CartItem) => void;
+  addItem: (item: CartItem) => Promise<void>;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
@@ -70,25 +72,93 @@ export const CartProvider = ({ children }: CartProviderProps) => {
     localStorage.setItem("cart", JSON.stringify(items));
   }, [items]);
 
-  const addItem = (newItem: CartItem) => {
-    setItems((prevItems) => {
-      // Check if item already exists in cart
-      const existingItemIndex = prevItems.findIndex(
-        (item) => item.id === newItem.id,
-      );
+  // Validate cart state and handle stale data (disabled aggressive validation)
+  useEffect(() => {
+    const validateCartState = async () => {
+      try {
+        const {
+          data: { user },
+          error,
+        } = await supabase.auth.getUser();
 
-      if (existingItemIndex >= 0) {
-        // Update existing item
-        const updatedItems = [...prevItems];
-        updatedItems[existingItemIndex] = {
-          ...updatedItems[existingItemIndex],
-          quantity: updatedItems[existingItemIndex].quantity + newItem.quantity,
-        };
-        return updatedItems;
-      } else {
-        // Add new item
-        return [...prevItems, newItem];
+        // Only clear cart if user is explicitly logged out and we have items
+        // Removed aggressive stale data clearing that was interfering with cart operations
+        if (!user && items.length > 0) {
+          // Only clear if we're sure user is not authenticated
+          const { data: session } = await supabase.auth.getSession();
+          if (!session.session) {
+            setItems([]);
+            localStorage.removeItem("cart");
+            console.log("Cleared cart data - user not authenticated");
+          }
+        }
+      } catch (error) {
+        console.error("Error validating cart state:", error);
+        // Don't clear cart on validation errors - this was too aggressive
       }
+    };
+
+    // Add event listener for focus to refresh session when user returns to tab
+    const handleFocus = async () => {
+      try {
+        await supabase.auth.refreshSession();
+        // Don't run validation on every focus - this was causing issues
+      } catch (error) {
+        console.error("Error refreshing session:", error);
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+
+    // Only run validation on mount, not on every items change
+    if (items.length === 0) {
+      validateCartState();
+    }
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []); // Changed dependency to empty array to prevent excessive validation
+
+  const addItem = async (newItem: CartItem) => {
+    console.log("Adding item to cart:", newItem);
+
+    // Validate required fields
+    if (!newItem.id || !newItem.name || !newItem.price || !newItem.quantity) {
+      console.error("Invalid cart item - missing required fields:", newItem);
+      return;
+    }
+
+    // Check if item already exists in cart to prevent duplicates
+    const existingItem = items.find(
+      (item) => item.kode_transaksi === newItem.kode_transaksi,
+    );
+
+    if (existingItem) {
+      console.log("Item already exists in cart, updating quantity");
+      // Just update quantity in cart
+      setItems((prevItems) =>
+        prevItems.map((item) =>
+          item.kode_transaksi === newItem.kode_transaksi
+            ? { ...item, quantity: item.quantity + newItem.quantity }
+            : item,
+        ),
+      );
+      return;
+    }
+
+    // Don't save to database here - let the checkout process handle database operations
+    // This prevents duplicate booking errors and allows proper transaction handling
+    console.log(
+      "Adding item to cart without database save - will be saved during checkout",
+    );
+
+    // Add new item to cart
+    setItems((prevItems) => {
+      console.log("Current cart items:", prevItems);
+      const updatedItems = [...prevItems, newItem];
+      console.log("Updated cart items:", updatedItems);
+      return updatedItems;
     });
   };
 

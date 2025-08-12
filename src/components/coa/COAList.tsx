@@ -82,6 +82,9 @@ export default function COAList() {
 
   // Format currency
   const formatCurrency = (amount: number) => {
+    if (amount === null || amount === undefined) {
+      return "0,00";
+    }
     return amount.toLocaleString("id-ID", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,

@@ -367,7 +367,7 @@ export default function TripsPage() {
                     // Add to cart
                     const newItem = {
                       id: uuidv4(),
-                      type: "trips",
+                      type: "travel" as const,
                       name: `Trip ${formData.jenis_trip} - ${formData.destinasi}`,
                       details: `${formData.tanggal_berangkat} s/d ${formData.tanggal_pulang} (${formData.jumlah_peserta} orang)`,
                       price: parseFloat(formData.harga_jual) || 0,
