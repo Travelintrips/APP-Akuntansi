@@ -52,19 +52,8 @@ const TrialBalanceDisplay = () => {
       setLoading(true);
       setError(null);
 
-      // First, sync trial balance with general ledger to ensure latest data
-      const { data: syncResult, error: syncError } = await supabase.rpc(
-        "sync_trial_balance_with_gl",
-        {
-          p_period_start: periodStart,
-          p_period_end: periodEnd,
-        },
-      );
-
-      if (syncError) {
-        console.warn("Warning syncing trial balance:", syncError);
-        // Continue even if sync fails, try to fetch existing data
-      }
+      // Calculate Trial Balance from ledger_summaries
+      await calculateTrialBalanceFromLedgerSummaries();
 
       // Fetch the most recent trial balance data with explicit ordering
       const { data: trialBalanceData, error: fetchError } = await supabase
@@ -108,24 +97,8 @@ const TrialBalanceDisplay = () => {
         }
       }
 
-      // Fetch summary with cross-validation against general ledger
-      const { data: summaryData, error: summaryError } = await supabase.rpc(
-        "get_trial_balance_summary",
-        {
-          p_period_start: periodStart,
-          p_period_end: periodEnd,
-        },
-      );
-
-      if (summaryError) {
-        console.error("Error fetching trial balance summary:", summaryError);
-        // Calculate summary manually if RPC fails
-        calculateSummaryManually(trialBalanceData);
-      } else if (summaryData && summaryData.length > 0) {
-        setSummary(summaryData[0]);
-      } else {
-        calculateSummaryManually(trialBalanceData);
-      }
+      // Calculate summary manually from the fetched data
+      calculateSummaryManually(trialBalanceData);
     } catch (err: any) {
       console.error("Exception fetching trial balance:", err);
       setError("Terjadi kesalahan saat mengambil data");
@@ -173,6 +146,115 @@ const TrialBalanceDisplay = () => {
     } catch (err: any) {
       console.error("Error in fetchFromChartOfAccounts:", err);
       setError("Gagal mengambil data cadangan");
+    }
+  };
+
+  const calculateTrialBalanceFromLedgerSummaries = async () => {
+    try {
+      // Get period string for ledger_summaries (format: YYYY-MM)
+      const periodString = periodStart.substring(0, 7); // Extract YYYY-MM from YYYY-MM-DD
+
+      // Fetch data from ledger_summaries for the selected period
+      const { data: ledgerData, error: ledgerError } = await supabase
+        .from("ledger_summaries")
+        .select("*")
+        .eq("period", periodString);
+
+      if (ledgerError) {
+        console.error("Error fetching ledger summaries:", ledgerError);
+        return;
+      }
+
+      if (!ledgerData || ledgerData.length === 0) {
+        console.warn("No ledger summaries found for period:", periodString);
+        return;
+      }
+
+      // Get chart of accounts to map account_code to account_id
+      const { data: coaData, error: coaError } = await supabase
+        .from("chart_of_accounts")
+        .select("id, account_code, account_name");
+
+      if (coaError) {
+        console.error("Error fetching chart of accounts:", coaError);
+        return;
+      }
+
+      // Create a map for quick lookup
+      const coaMap = new Map();
+      coaData?.forEach((account) => {
+        coaMap.set(account.account_code, account);
+      });
+
+      // Calculate trial balance entries
+      const trialBalanceEntries = ledgerData
+        .map((ledgerEntry) => {
+          const openingBalance = ledgerEntry.opening_balance || 0;
+          const totalDebit = ledgerEntry.total_debit || 0;
+          const totalCredit = ledgerEntry.total_credit || 0;
+
+          // Calculate closing balance: opening_balance + total_debit - total_credit
+          const closingBalance = openingBalance + totalDebit - totalCredit;
+
+          // Calculate debit_balance and credit_balance
+          const debitBalance = Math.max(closingBalance, 0);
+          const creditBalance = Math.max(-closingBalance, 0);
+
+          // Get account info from COA
+          const accountInfo = coaMap.get(ledgerEntry.account_code);
+
+          return {
+            account_id: accountInfo?.id || null,
+            period_start: periodStart,
+            period_end: periodEnd,
+            account_code: ledgerEntry.account_code,
+            account_name:
+              ledgerEntry.account_name ||
+              accountInfo?.account_name ||
+              "Unknown Account",
+            opening_balance: openingBalance,
+            period_debit: totalDebit,
+            period_credit: totalCredit,
+            closing_balance: closingBalance,
+            debit_balance: debitBalance,
+            credit_balance: creditBalance,
+            balance: closingBalance,
+            net_balance: closingBalance,
+          };
+        })
+        .filter((entry) => entry.account_id); // Only include entries with valid account_id
+
+      // UPSERT to trial_balance table
+      if (trialBalanceEntries.length > 0) {
+        // First, delete existing entries for this period
+        const { error: deleteError } = await supabase
+          .from("trial_balance")
+          .delete()
+          .eq("period_start", periodStart)
+          .eq("period_end", periodEnd);
+
+        if (deleteError) {
+          console.error("Error deleting existing trial balance:", deleteError);
+        }
+
+        // Insert new entries
+        const { error: insertError } = await supabase
+          .from("trial_balance")
+          .insert(trialBalanceEntries);
+
+        if (insertError) {
+          console.error("Error inserting trial balance:", insertError);
+        } else {
+          console.log(
+            `Successfully upserted ${trialBalanceEntries.length} trial balance entries`,
+          );
+        }
+      }
+    } catch (err: any) {
+      console.error(
+        "Error calculating trial balance from ledger summaries:",
+        err,
+      );
     }
   };
 
