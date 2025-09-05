@@ -22,6 +22,7 @@ import {
   User,
   CreditCard,
   FileImage,
+  Wallet,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useCart } from "../context/CartContext";
@@ -234,6 +235,17 @@ const Sidebar = ({
           >
             <FileText className="h-5 w-5" />
             <span>Laporan Transaksi</span>
+          </Link>
+        )}
+
+        {/* Topup Driver - Only for Admin */}
+        {isAdmin && (
+          <Link
+            to="/reports/driver-topups"
+            className={`flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent transition-colors ${activeItem === "driver-topups" ? "bg-accent" : ""}`}
+          >
+            <Wallet className="h-5 w-5" />
+            <span>Topup Driver</span>
           </Link>
         )}
       </nav>

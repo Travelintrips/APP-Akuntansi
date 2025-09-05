@@ -26,6 +26,7 @@ import AirportTransferPage from "./pages/sub-account/AirportTransfer";
 import RentalCarPage from "./pages/sub-account/RentalCar";
 import UserRoleDebug from "./components/debug/UserRoleDebug";
 import UsersPage from "./pages/Users";
+import DriverTopupsPage from "./pages/DriverTopups";
 
 // Protected route component
 const ProtectedRoute = ({
@@ -320,6 +321,16 @@ function App() {
               element={
                 <AdminRoute>
                   <UsersPage />
+                </AdminRoute>
+              }
+            />
+
+            {/* Driver Topups - Only for Admin */}
+            <Route
+              path="/reports/driver-topups"
+              element={
+                <AdminRoute>
+                  <DriverTopupsPage />
                 </AdminRoute>
               }
             />
