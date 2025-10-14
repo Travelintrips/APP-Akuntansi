@@ -409,7 +409,7 @@ const DriverTopupsPage = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Kode</TableHead>
+                  {/* <TableHead>Kode</TableHead>*/}
                   <TableHead>Driver</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead>Method</TableHead>
@@ -422,9 +422,9 @@ const DriverTopupsPage = () => {
               <TableBody>
                 {currentTopups.map((topup) => (
                   <TableRow key={topup.id}>
-                    <TableCell className="font-medium">
+                    {/*  <TableCell className="font-medium">
                       {topup.topup_code || "-"}
-                    </TableCell>
+                    </TableCell>*/}
                     <TableCell>
                       <div>
                         <p className="font-medium">
@@ -438,16 +438,25 @@ const DriverTopupsPage = () => {
                     <TableCell className="text-right font-medium">
                       {formatCurrency(topup.amount)}
                     </TableCell>
-                    <TableCell>{topup.method || "-"}</TableCell>
+                    <TableCell>
+                      {topup.payment_method
+                        ? topup.payment_method === "bank_transfer"
+                          ? `Bank Transfer${topup.bank_name ? ` (${topup.bank_name})` : ""}`
+                          : topup.payment_method === "cash"
+                            ? "Tunai"
+                            : topup.payment_method === "credit_card"
+                              ? "Kartu Kredit/Debit"
+                              : topup.payment_method
+                        : "-"}
+                    </TableCell>
+
                     <TableCell>{getStatusBadge(topup.status)}</TableCell>
                     <TableCell>
-                      {topup.verifier_full_name ? (
+                      {topup.admin_full_name ? (
                         <div>
-                          <p className="font-medium">
-                            {topup.verifier_full_name}
-                          </p>
+                          <p className="font-medium">{topup.admin_full_name}</p>
                           <p className="text-sm text-muted-foreground">
-                            {topup.verifier_email}
+                            {topup.admin_email}
                           </p>
                         </div>
                       ) : (
@@ -486,7 +495,7 @@ const DriverTopupsPage = () => {
                                   <div className="space-y-2 text-sm">
                                     <p>
                                       <strong>Kode:</strong>{" "}
-                                      {selectedTopup.topup_code}
+                                      {selectedTopup.reference_no}
                                     </p>
                                     <p>
                                       <strong>Amount:</strong>{" "}
@@ -494,8 +503,20 @@ const DriverTopupsPage = () => {
                                     </p>
                                     <p>
                                       <strong>Method:</strong>{" "}
-                                      {selectedTopup.method}
+                                      {selectedTopup.payment_method
+                                        ? selectedTopup.payment_method ===
+                                          "bank_transfer"
+                                          ? `Bank Transfer${selectedTopup.bank_name ? ` (${selectedTopup.bank_name})` : ""}`
+                                          : selectedTopup.payment_method ===
+                                              "cash"
+                                            ? "Tunai"
+                                            : selectedTopup.payment_method ===
+                                                "credit_card"
+                                              ? `Kartu Kredit/Debit${selectedTopup.bank_name ? ` (${selectedTopup.bank_name})` : ""}`
+                                              : selectedTopup.payment_method
+                                        : "-"}
                                     </p>
+
                                     <p>
                                       <strong>Status:</strong>{" "}
                                       {getStatusBadge(selectedTopup.status)}

@@ -13,12 +13,11 @@ import { Calendar, RefreshCw, AlertCircle } from "lucide-react";
 import supabase from "@/lib/supabase";
 
 interface TrialBalanceEntry {
-  id: string;
   account_code: string;
   account_name: string;
-  debit_balance: number;
-  credit_balance: number;
-  net_balance: number;
+  debit: number;
+  credit: number;
+  closing_balance: number;
 }
 
 interface TrialBalanceSummary {
@@ -52,209 +51,61 @@ const TrialBalanceDisplay = () => {
       setLoading(true);
       setError(null);
 
-      // Calculate Trial Balance from ledger_summaries
-      await calculateTrialBalanceFromLedgerSummaries();
-
-      // Fetch the most recent trial balance data with explicit ordering
+      // Fetch trial balance data from trial_balance_view with specific columns
       const { data: trialBalanceData, error: fetchError } = await supabase
-        .from("trial_balance")
-        .select("*")
-        .eq("period_start", periodStart)
-        .eq("period_end", periodEnd)
-        .order("updated_at", { ascending: false })
+        .from("trial_balance_view")
+        .select("account_code, account_name, debit, credit, closing_balance")
         .order("account_code", { ascending: true });
 
       if (fetchError) {
         console.error("Error fetching trial balance:", fetchError);
-        // If trial balance table is empty, try to get data from chart_of_accounts
-        await fetchFromChartOfAccounts();
+        setError("Gagal mengambil data neraca saldo");
         return;
       }
 
       if (!trialBalanceData || trialBalanceData.length === 0) {
-        // If no trial balance data, try to get from chart_of_accounts
-        await fetchFromChartOfAccounts();
+        setTrialBalance([]);
+        setSummary({
+          total_debit: 0,
+          total_credit: 0,
+          is_balanced: true,
+          record_count: 0,
+          gl_total_debit: 0,
+          gl_total_credit: 0,
+        });
         return;
       }
 
-      setTrialBalance(trialBalanceData || []);
+      // Transform data and convert to numbers
+      const transformedData: TrialBalanceEntry[] = trialBalanceData.map((entry) => ({
+        account_code: entry.account_code,
+        account_name: entry.account_name,
+        debit: Number(entry.debit) || 0,
+        credit: Number(entry.credit) || 0,
+        closing_balance: Number(entry.closing_balance) || 0,
+      }));
 
-      // Update last updated timestamp
-      if (trialBalanceData && trialBalanceData.length > 0) {
-        const latestUpdate = trialBalanceData.reduce((latest, entry) => {
-          // Safely handle potentially null timestamp values
-          const updatedAt = entry.updated_at
-            ? new Date(entry.updated_at).getTime()
-            : 0;
-          const createdAt = entry.created_at
-            ? new Date(entry.created_at).getTime()
-            : 0;
-          const entryTime = Math.max(updatedAt, createdAt, 0);
-          return entryTime > latest ? entryTime : latest;
-        }, 0);
-        if (latestUpdate > 0) {
-          setLastUpdated(new Date(latestUpdate).toLocaleString("id-ID"));
-        }
-      }
+      setTrialBalance(transformedData);
 
-      // Calculate summary manually from the fetched data
-      calculateSummaryManually(trialBalanceData);
+      // Calculate totals
+      const totalDebit = transformedData.reduce((sum, row) => sum + Number(row.debit), 0);
+      const totalCredit = transformedData.reduce((sum, row) => sum + Number(row.credit), 0);
+
+      setSummary({
+        total_debit: totalDebit,
+        total_credit: totalCredit,
+        is_balanced: Math.abs(totalDebit - totalCredit) < 0.01,
+        record_count: transformedData.length,
+        gl_total_debit: totalDebit,
+        gl_total_credit: totalCredit,
+      });
+
+      setLastUpdated(new Date().toLocaleString("id-ID"));
     } catch (err: any) {
       console.error("Exception fetching trial balance:", err);
       setError("Terjadi kesalahan saat mengambil data");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchFromChartOfAccounts = async () => {
-    try {
-      // Fallback: Get data directly from chart_of_accounts
-      const { data: coaData, error: coaError } = await supabase
-        .from("chart_of_accounts")
-        .select("id, account_code, account_name, current_balance, account_type")
-        .not("current_balance", "is", null)
-        .order("account_code");
-
-      if (coaError) {
-        console.error("Error fetching from chart of accounts:", coaError);
-        setError("Gagal mengambil data dari bagan akun");
-        return;
-      }
-
-      // Transform COA data to trial balance format
-      const transformedData: TrialBalanceEntry[] =
-        coaData?.map((account) => {
-          const balance = account.current_balance || 0;
-          const isDebitAccount = ["Asset", "Expense"].includes(
-            account.account_type,
-          );
-
-          return {
-            id: account.id,
-            account_code: account.account_code,
-            account_name: account.account_name,
-            debit_balance: isDebitAccount && balance > 0 ? balance : 0,
-            credit_balance:
-              !isDebitAccount && balance > 0 ? Math.abs(balance) : 0,
-            net_balance: balance,
-          };
-        }) || [];
-
-      setTrialBalance(transformedData);
-      calculateSummaryManually(transformedData);
-    } catch (err: any) {
-      console.error("Error in fetchFromChartOfAccounts:", err);
-      setError("Gagal mengambil data cadangan");
-    }
-  };
-
-  const calculateTrialBalanceFromLedgerSummaries = async () => {
-    try {
-      // Get period string for ledger_summaries (format: YYYY-MM)
-      const periodString = periodStart.substring(0, 7); // Extract YYYY-MM from YYYY-MM-DD
-
-      // Fetch data from ledger_summaries for the selected period
-      const { data: ledgerData, error: ledgerError } = await supabase
-        .from("ledger_summaries")
-        .select("*")
-        .eq("period", periodString);
-
-      if (ledgerError) {
-        console.error("Error fetching ledger summaries:", ledgerError);
-        return;
-      }
-
-      if (!ledgerData || ledgerData.length === 0) {
-        console.warn("No ledger summaries found for period:", periodString);
-        return;
-      }
-
-      // Get chart of accounts to map account_code to account_id
-      const { data: coaData, error: coaError } = await supabase
-        .from("chart_of_accounts")
-        .select("id, account_code, account_name");
-
-      if (coaError) {
-        console.error("Error fetching chart of accounts:", coaError);
-        return;
-      }
-
-      // Create a map for quick lookup
-      const coaMap = new Map();
-      coaData?.forEach((account) => {
-        coaMap.set(account.account_code, account);
-      });
-
-      // Calculate trial balance entries
-      const trialBalanceEntries = ledgerData
-        .map((ledgerEntry) => {
-          const openingBalance = ledgerEntry.opening_balance || 0;
-          const totalDebit = ledgerEntry.total_debit || 0;
-          const totalCredit = ledgerEntry.total_credit || 0;
-
-          // Calculate closing balance: opening_balance + total_debit - total_credit
-          const closingBalance = openingBalance + totalDebit - totalCredit;
-
-          // Calculate debit_balance and credit_balance
-          const debitBalance = Math.max(closingBalance, 0);
-          const creditBalance = Math.max(-closingBalance, 0);
-
-          // Get account info from COA
-          const accountInfo = coaMap.get(ledgerEntry.account_code);
-
-          return {
-            account_id: accountInfo?.id || null,
-            period_start: periodStart,
-            period_end: periodEnd,
-            account_code: ledgerEntry.account_code,
-            account_name:
-              ledgerEntry.account_name ||
-              accountInfo?.account_name ||
-              "Unknown Account",
-            opening_balance: openingBalance,
-            period_debit: totalDebit,
-            period_credit: totalCredit,
-            closing_balance: closingBalance,
-            debit_balance: debitBalance,
-            credit_balance: creditBalance,
-            balance: closingBalance,
-            net_balance: closingBalance,
-          };
-        })
-        .filter((entry) => entry.account_id); // Only include entries with valid account_id
-
-      // UPSERT to trial_balance table
-      if (trialBalanceEntries.length > 0) {
-        // First, delete existing entries for this period
-        const { error: deleteError } = await supabase
-          .from("trial_balance")
-          .delete()
-          .eq("period_start", periodStart)
-          .eq("period_end", periodEnd);
-
-        if (deleteError) {
-          console.error("Error deleting existing trial balance:", deleteError);
-        }
-
-        // Insert new entries
-        const { error: insertError } = await supabase
-          .from("trial_balance")
-          .insert(trialBalanceEntries);
-
-        if (insertError) {
-          console.error("Error inserting trial balance:", insertError);
-        } else {
-          console.log(
-            `Successfully upserted ${trialBalanceEntries.length} trial balance entries`,
-          );
-        }
-      }
-    } catch (err: any) {
-      console.error(
-        "Error calculating trial balance from ledger summaries:",
-        err,
-      );
     }
   };
 
@@ -278,12 +129,13 @@ const TrialBalanceDisplay = () => {
     });
   };
 
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("id-ID", {
       style: "currency",
       currency: "IDR",
       minimumFractionDigits: 0,
-    }).format(value);
+      maximumFractionDigits: 0,
+    }).format(amount);
   };
 
   const formatDate = (dateString: string) => {
@@ -295,7 +147,7 @@ const TrialBalanceDisplay = () => {
   };
 
   return (
-    <div className="space-y-6 bg-white" data-testid="trial-balance">
+    <div className="bg-white p-6 rounded-lg shadow-sm border">
       <Card className="bg-white border border-gray-200">
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -403,60 +255,64 @@ const TrialBalanceDisplay = () => {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50">
-                    <TableHead className="font-semibold text-gray-700">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
                       Kode Akun
-                    </TableHead>
-                    <TableHead className="font-semibold text-gray-700">
+                    </th>
+                    <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
                       Nama Akun
-                    </TableHead>
-                    <TableHead className="font-semibold text-gray-700 text-right">
+                    </th>
+                    <th className="border border-gray-300 px-4 py-2 text-right font-semibold">
                       Debit
-                    </TableHead>
-                    <TableHead className="font-semibold text-gray-700 text-right">
+                    </th>
+                    <th className="border border-gray-300 px-4 py-2 text-right font-semibold">
                       Kredit
-                    </TableHead>
-                    <TableHead className="font-semibold text-gray-700 text-right">
-                      Saldo Bersih
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {trialBalance.map((entry) => (
-                    <TableRow key={entry.id} className="hover:bg-gray-50">
-                      <TableCell className="font-mono text-sm">
-                        {entry.account_code}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {entry.account_name}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {entry.debit_balance > 0
-                          ? formatCurrency(entry.debit_balance)
-                          : "-"}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {entry.credit_balance > 0
-                          ? formatCurrency(entry.credit_balance)
-                          : "-"}
-                      </TableCell>
-                      <TableCell
-                        className={`text-right font-mono font-semibold ${
-                          entry.net_balance > 0
-                            ? "text-green-600"
-                            : entry.net_balance < 0
-                              ? "text-red-600"
-                              : "text-gray-600"
-                        }`}
-                      >
-                        {formatCurrency(entry.net_balance)}
-                      </TableCell>
-                    </TableRow>
+                    </th>
+                    <th className="border border-gray-300 px-4 py-2 text-right font-semibold">
+                      Saldo Akhir
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trialBalance.map((row, index) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="border border-gray-300 px-4 py-2 font-mono">
+                        {row.account_code}
+                      </td>
+                      <td className="border border-gray-300 px-4 py-2">
+                        {row.account_name}
+                      </td>
+                      <td className="border border-gray-300 px-4 py-2 text-right font-mono">
+                        {formatCurrency(Number(row.debit))}
+                      </td>
+                      <td className="border border-gray-300 px-4 py-2 text-right font-mono">
+                        {formatCurrency(Number(row.credit))}
+                      </td>
+                      <td className="border border-gray-300 px-4 py-2 text-right font-mono">
+                        {formatCurrency(Number(row.closing_balance))}
+                      </td>
+                    </tr>
                   ))}
-                </TableBody>
-              </Table>
+                </tbody>
+                <tfoot>
+                  <tr className="bg-gray-100 font-semibold">
+                    <td className="border border-gray-300 px-4 py-2" colSpan={2}>
+                      Total
+                    </td>
+                    <td className="border border-gray-300 px-4 py-2 text-right font-mono">
+                      {formatCurrency(summary.total_debit)}
+                    </td>
+                    <td className="border border-gray-300 px-4 py-2 text-right font-mono">
+                      {formatCurrency(summary.total_credit)}
+                    </td>
+                    <td className="border border-gray-300 px-4 py-2 text-right font-mono">
+                      {formatCurrency(summary.total_debit - summary.total_credit)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           )}
         </CardContent>

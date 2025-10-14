@@ -16,9 +16,12 @@ import {
   Car,
   FileText,
   BarChart3,
+  ShoppingCart,
+  Package,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useUserRole } from "@/hooks/useUserRole";
+import BackButton from "@/components/common/BackButton";
 
 export default function SubAccountDashboard() {
   const navigate = useNavigate();
@@ -67,6 +70,20 @@ export default function SubAccountDashboard() {
       path: "/sub-account/rental-car",
       color: "bg-red-50",
     },
+    {
+      title: "Stok Barang",
+      description: "Manajemen stok barang",
+      icon: <Package className="h-8 w-8 text-indigo-600" />,
+      path: "/layanan/stok-barang",
+      color: "bg-indigo-50",
+    },
+    {
+      title: "Pengajuan Pembelian",
+      description: "Form pengajuan & item",
+      icon: <ShoppingCart className="h-8 w-8 text-teal-600" />,
+      path: "/layanan/pengajuan-pembelian",
+      color: "bg-teal-50",
+    },
   ];
 
   return (
@@ -74,6 +91,10 @@ export default function SubAccountDashboard() {
       <div className="p-6 overflow-auto">
         <div className="max-w-6xl mx-auto">
           <div className="mb-8">
+            <div className="flex items-center gap-2">
+              <BackButton to="/dashboard" />
+              <span className="text-sm font-medium">Back to Dashboard</span>
+            </div>
             <h1 className="text-3xl font-bold">Layanan</h1>
             <p className="text-muted-foreground mt-2">
               Pilih kategori sub akun untuk melihat detail dan mengelola

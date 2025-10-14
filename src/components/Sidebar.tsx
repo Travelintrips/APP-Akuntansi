@@ -29,6 +29,7 @@ import { useCart } from "../context/CartContext";
 import Cart from "../components/cart/Cart";
 import { useUserRole } from "../hooks/useUserRole";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 import {
   Select,
   SelectContent,
@@ -62,11 +63,12 @@ const Sidebar = ({
   const [isCartOpen, setIsCartOpen] = useState(false);
   const { totalItems } = useCart();
   const { userProfile, isAdmin, isStaffTrips } = useUserRole();
+  const navigate = useNavigate();
 
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
-      // Navigation will be handled by the auth state listener in App.tsx
+      navigate("/auth"); // langsung redirect
     } catch (error) {
       console.error("Error logging out:", error);
     }
@@ -185,6 +187,13 @@ const Sidebar = ({
               >
                 <Car className="h-4 w-4" />
                 <span>Rental Car</span>
+              </Link>
+              <Link
+                to="/layanan/pengajuan-pembelian"
+                className={`flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent transition-colors ${activeItem === "pengajuan-pembelian" ? "bg-accent" : ""}`}
+              >
+                <ShoppingCart className="h-4 w-4" />
+                <span>Pengajuan Pembelian</span>
               </Link>
             </div>
           )}

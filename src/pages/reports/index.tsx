@@ -7,7 +7,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import BalanceSheet from "@/components/reports/BalanceSheet";
 
 export default function ReportsPage() {
   return (
@@ -39,7 +38,9 @@ export default function ReportsPage() {
       </div>
 
       <div className="w-full">
-        <BalanceSheet />
+        <p className="text-gray-500 text-center py-8">
+          Pilih jenis laporan dari menu navigasi
+        </p>
       </div>
     </div>
   );

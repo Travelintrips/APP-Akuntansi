@@ -27,6 +27,8 @@ import RentalCarPage from "./pages/sub-account/RentalCar";
 import UserRoleDebug from "./components/debug/UserRoleDebug";
 import UsersPage from "./pages/Users";
 import DriverTopupsPage from "./pages/DriverTopups";
+import PengajuanPembelian from "./pages/layanan/PengajuanPembelian";
+import StokBarang from "./pages/layanan/StokBarang";
 
 // Protected route component
 const ProtectedRoute = ({
@@ -270,6 +272,22 @@ function App() {
               element={
                 <StaffTripsRoute>
                   <RentalCarPage />
+                </StaffTripsRoute>
+              }
+            />
+            <Route
+              path="/layanan/stok-barang"
+              element={
+                <StaffTripsRoute>
+                  <StokBarang />
+                </StaffTripsRoute>
+              }
+            />
+            <Route
+              path="/layanan/pengajuan-pembelian"
+              element={
+                <StaffTripsRoute>
+                  <PengajuanPembelian />
                 </StaffTripsRoute>
               }
             />

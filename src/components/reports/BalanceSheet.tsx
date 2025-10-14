@@ -163,12 +163,13 @@ export default function BalanceSheet() {
         console.error("Profit Loss error:", profitLossError);
       }
 
-      // Fetch trial balance
+      // Fetch trial balance from trial_balance_view
       const { data: trialBalanceData, error: trialBalanceError } =
         await supabase
           .from("trial_balance_view")
           .select("*")
-          .eq("period", period)
+          .eq("period_start", formattedDate)
+          .eq("period_end", formattedDate)
           .order("account_code");
 
       if (trialBalanceError) {

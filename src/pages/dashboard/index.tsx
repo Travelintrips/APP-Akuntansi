@@ -631,7 +631,7 @@ const Dashboard = () => {
                           ? "Neraca"
                           : "Dashboard"}
               </h1>
-              <Button
+              {/* <Button
                 onClick={async () => {
                   await supabase.auth.signOut();
                   navigate("/auth");
@@ -639,7 +639,7 @@ const Dashboard = () => {
                 variant="destructive"
               >
                 Sign Out
-              </Button>
+              </Button>*/}
             </div>
 
             {activeItem === "dashboard" && (
