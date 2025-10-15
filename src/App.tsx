@@ -29,6 +29,7 @@ import UsersPage from "./pages/Users";
 import DriverTopupsPage from "./pages/DriverTopups";
 import PengajuanPembelian from "./pages/layanan/PengajuanPembelian";
 import StokBarang from "./pages/layanan/StokBarang";
+import Supplier from "./pages/layanan/Supplier";
 
 // Protected route component
 const ProtectedRoute = ({
@@ -288,6 +289,14 @@ function App() {
               element={
                 <StaffTripsRoute>
                   <PengajuanPembelian />
+                </StaffTripsRoute>
+              }
+            />
+            <Route
+              path="/layanan/supplier"
+              element={
+                <StaffTripsRoute>
+                  <Supplier />
                 </StaffTripsRoute>
               }
             />
