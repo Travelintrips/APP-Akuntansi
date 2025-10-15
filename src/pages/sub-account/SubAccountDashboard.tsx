@@ -18,6 +18,7 @@ import {
   BarChart3,
   ShoppingCart,
   Package,
+  Building2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -83,6 +84,13 @@ export default function SubAccountDashboard() {
       icon: <ShoppingCart className="h-8 w-8 text-teal-600" />,
       path: "/layanan/pengajuan-pembelian",
       color: "bg-teal-50",
+    },
+    {
+      title: "Supplier",
+      description: "Manajemen data supplier",
+      icon: <Building2 className="h-8 w-8 text-pink-600" />,
+      path: "/layanan/supplier",
+      color: "bg-pink-50",
     },
   ];
 

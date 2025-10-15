@@ -15,6 +15,7 @@ interface StockForm {
   warehouse_location: string;
   part_number: string;
   item_name: string;
+  unit: string;
   brand: string;
   model: string;
   vehicle_type: string;
@@ -31,11 +32,26 @@ interface StockForm {
 }
 
 const STOCK_CATEGORIES = [
-  "Resale",
+  "Raw Materials",
+  "Work-In-Process (WIP)",
+  "Finished Goods",
+  "Resale/Merchandise",
+  "Kits/Bundles",
   "Spare Parts",
-  "Maintenance/Repair/Operations",
+  "MRO",
   "Consumables",
-  "Rentable Units"
+  "Packaging",
+  "Food",
+  "Beverages",
+  "Rentable Units",
+  "Demo/Loaner Units",
+  "Returns",
+  "Defective/Damaged",
+  "Obsolete/Expired",
+  "Goods In Transit",
+  "Consignment",
+  "Third-Party Owned",
+  "Samples/Marketing"
 ];
 
 const WAREHOUSE_LOCATIONS = [
@@ -59,6 +75,7 @@ const StokBarang = () => {
     warehouse_location: "",
     part_number: "",
     item_name: "",
+    unit: "",
     brand: "",
     model: "",
     vehicle_type: "",
@@ -326,6 +343,7 @@ const StokBarang = () => {
         category: [formData.category],
         warehouse_location: formData.warehouse_location,
         item_name: formData.item_name,
+        unit: formData.unit,
         quantity: formData.quantity,
         ppn_type: formData.ppn_type,
         purchase_price: purchasePriceNum,
@@ -401,6 +419,7 @@ const StokBarang = () => {
         warehouse_location: "",
         part_number: "",
         item_name: "",
+        unit: "",
         brand: "",
         model: "",
         vehicle_type: "",
@@ -517,6 +536,17 @@ const StokBarang = () => {
                 onChange={(e) => updateFormData("item_name", e.target.value)}
                 placeholder="Masukkan nama barang"
               />
+            </div>
+
+            <div>
+              <Label htmlFor="unit">Unit</Label>
+              <Input
+                id="unit"
+                value={formData.unit}
+                onChange={(e) => updateFormData("unit", e.target.value)}
+                placeholder="Masukkan unit"
+              />
+              <p className="text-sm text-gray-500 mt-1">Contoh: botol, pack, pcs, dll.</p>
             </div>
 
             {(formData.category === "Resale" || formData.category === "Consumables" || formData.category === "Rentable Units") && (

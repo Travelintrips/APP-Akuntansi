@@ -1180,6 +1180,221 @@ export type Database = {
           },
         ]
       }
+      cargo_destinations: {
+        Row: {
+          city: string | null
+          code: string | null
+          created_at: string | null
+          id: string
+          province: string | null
+          type: string | null
+        }
+        Insert: {
+          city?: string | null
+          code?: string | null
+          created_at?: string | null
+          id?: string
+          province?: string | null
+          type?: string | null
+        }
+        Update: {
+          city?: string | null
+          code?: string | null
+          created_at?: string | null
+          id?: string
+          province?: string | null
+          type?: string | null
+        }
+        Relationships: []
+      }
+      cargo_intracity_rates: {
+        Row: {
+          base_price: number
+          city: string
+          id: string
+          max_distance: number | null
+          max_weight: number | null
+          min_distance: number | null
+          min_weight: number | null
+          rate_per_km: number
+          updated_at: string | null
+          vehicle_type: string | null
+        }
+        Insert: {
+          base_price: number
+          city?: string
+          id?: string
+          max_distance?: number | null
+          max_weight?: number | null
+          min_distance?: number | null
+          min_weight?: number | null
+          rate_per_km: number
+          updated_at?: string | null
+          vehicle_type?: string | null
+        }
+        Update: {
+          base_price?: number
+          city?: string
+          id?: string
+          max_distance?: number | null
+          max_weight?: number | null
+          min_distance?: number | null
+          min_weight?: number | null
+          rate_per_km?: number
+          updated_at?: string | null
+          vehicle_type?: string | null
+        }
+        Relationships: []
+      }
+      cargo_orders: {
+        Row: {
+          created_at: string | null
+          created_by: string
+          currency: string | null
+          customer_id: string | null
+          dest_address: string | null
+          dest_code: string | null
+          driver_id: string | null
+          dropoff_city: string | null
+          dropoff_province: string | null
+          eta: string | null
+          id: string
+          item_description: string | null
+          order_reference: string | null
+          origin_address: string | null
+          origin_code: string | null
+          payment_status: string | null
+          pickup_city: string | null
+          pickup_province: string | null
+          price: number | null
+          service_type: string | null
+          status: string | null
+          updated_at: string | null
+          volume_m3: number | null
+          weight_kg: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by: string
+          currency?: string | null
+          customer_id?: string | null
+          dest_address?: string | null
+          dest_code?: string | null
+          driver_id?: string | null
+          dropoff_city?: string | null
+          dropoff_province?: string | null
+          eta?: string | null
+          id?: string
+          item_description?: string | null
+          order_reference?: string | null
+          origin_address?: string | null
+          origin_code?: string | null
+          payment_status?: string | null
+          pickup_city?: string | null
+          pickup_province?: string | null
+          price?: number | null
+          service_type?: string | null
+          status?: string | null
+          updated_at?: string | null
+          volume_m3?: number | null
+          weight_kg?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string
+          currency?: string | null
+          customer_id?: string | null
+          dest_address?: string | null
+          dest_code?: string | null
+          driver_id?: string | null
+          dropoff_city?: string | null
+          dropoff_province?: string | null
+          eta?: string | null
+          id?: string
+          item_description?: string | null
+          order_reference?: string | null
+          origin_address?: string | null
+          origin_code?: string | null
+          payment_status?: string | null
+          pickup_city?: string | null
+          pickup_province?: string | null
+          price?: number | null
+          service_type?: string | null
+          status?: string | null
+          updated_at?: string | null
+          volume_m3?: number | null
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cargo_orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "agent_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cargo_orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cargo_orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_user_role_consistency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cargo_orders_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cargo_rates: {
+        Row: {
+          base_price: number
+          dest_code: string
+          extra_delivery_fee: number | null
+          extra_pickup_fee: number | null
+          id: string
+          origin_code: string
+          price_per_kg: number | null
+          price_per_m3: number | null
+          service_type: string
+          updated_at: string | null
+        }
+        Insert: {
+          base_price: number
+          dest_code: string
+          extra_delivery_fee?: number | null
+          extra_pickup_fee?: number | null
+          id?: string
+          origin_code: string
+          price_per_kg?: number | null
+          price_per_m3?: number | null
+          service_type: string
+          updated_at?: string | null
+        }
+        Update: {
+          base_price?: number
+          dest_code?: string
+          extra_delivery_fee?: number | null
+          extra_pickup_fee?: number | null
+          id?: string
+          origin_code?: string
+          price_per_kg?: number | null
+          price_per_m3?: number | null
+          service_type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       chart_of_accounts: {
         Row: {
           account_code: string
@@ -4360,6 +4575,7 @@ export type Database = {
       purchase_requests: {
         Row: {
           attachment_url: string | null
+          barcode: string | null
           completed_at: string | null
           completed_by: string | null
           completion_notes: string | null
@@ -4369,6 +4585,7 @@ export type Database = {
           id: string
           item_name: string
           name: string
+          notes: string | null
           qty: number
           received_date: string | null
           rejected_at: string | null
@@ -4387,6 +4604,7 @@ export type Database = {
         }
         Insert: {
           attachment_url?: string | null
+          barcode?: string | null
           completed_at?: string | null
           completed_by?: string | null
           completion_notes?: string | null
@@ -4396,6 +4614,7 @@ export type Database = {
           id?: string
           item_name: string
           name: string
+          notes?: string | null
           qty?: number
           received_date?: string | null
           rejected_at?: string | null
@@ -4414,6 +4633,7 @@ export type Database = {
         }
         Update: {
           attachment_url?: string | null
+          barcode?: string | null
           completed_at?: string | null
           completed_by?: string | null
           completion_notes?: string | null
@@ -4423,6 +4643,7 @@ export type Database = {
           id?: string
           item_name?: string
           name?: string
+          notes?: string | null
           qty?: number
           received_date?: string | null
           rejected_at?: string | null
@@ -4847,6 +5068,7 @@ export type Database = {
       }
       stock: {
         Row: {
+          barcode: string | null
           brand: string[] | null
           category: string[] | null
           closing_stock: number | null
@@ -4871,11 +5093,13 @@ export type Database = {
           selling_price: number
           stock_in: number | null
           stock_out: number | null
+          unit: string | null
           updated_at: string | null
           vehicle_type: string | null
           warehouse_location: string
         }
         Insert: {
+          barcode?: string | null
           brand?: string[] | null
           category?: string[] | null
           closing_stock?: number | null
@@ -4900,11 +5124,13 @@ export type Database = {
           selling_price?: number
           stock_in?: number | null
           stock_out?: number | null
+          unit?: string | null
           updated_at?: string | null
           vehicle_type?: string | null
           warehouse_location?: string
         }
         Update: {
+          barcode?: string | null
           brand?: string[] | null
           category?: string[] | null
           closing_stock?: number | null
@@ -4929,6 +5155,7 @@ export type Database = {
           selling_price?: number
           stock_in?: number | null
           stock_out?: number | null
+          unit?: string | null
           updated_at?: string | null
           vehicle_type?: string | null
           warehouse_location?: string
@@ -4953,6 +5180,90 @@ export type Database = {
           email?: string | null
           id?: string
           name?: string | null
+        }
+        Relationships: []
+      }
+      suppliers: {
+        Row: {
+          address: string | null
+          attachment_url: string | null
+          bank_account_holder: string | null
+          bank_account_number: string | null
+          bank_name: string | null
+          category: string | null
+          city: string | null
+          contact_person: string | null
+          country: string | null
+          created_at: string | null
+          created_by: string | null
+          currency: string | null
+          email: string | null
+          id: string
+          notes: string | null
+          payment_terms: string | null
+          phone_number: string | null
+          rating: number | null
+          status: string | null
+          supplier_code: string | null
+          supplier_name: string
+          supplier_type: string | null
+          tax_id: string | null
+          updated_at: string | null
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          attachment_url?: string | null
+          bank_account_holder?: string | null
+          bank_account_number?: string | null
+          bank_name?: string | null
+          category?: string | null
+          city?: string | null
+          contact_person?: string | null
+          country?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          currency?: string | null
+          email?: string | null
+          id?: string
+          notes?: string | null
+          payment_terms?: string | null
+          phone_number?: string | null
+          rating?: number | null
+          status?: string | null
+          supplier_code?: string | null
+          supplier_name: string
+          supplier_type?: string | null
+          tax_id?: string | null
+          updated_at?: string | null
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          attachment_url?: string | null
+          bank_account_holder?: string | null
+          bank_account_number?: string | null
+          bank_name?: string | null
+          category?: string | null
+          city?: string | null
+          contact_person?: string | null
+          country?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          currency?: string | null
+          email?: string | null
+          id?: string
+          notes?: string | null
+          payment_terms?: string | null
+          phone_number?: string | null
+          rating?: number | null
+          status?: string | null
+          supplier_code?: string | null
+          supplier_name?: string
+          supplier_type?: string | null
+          tax_id?: string | null
+          updated_at?: string | null
+          website?: string | null
         }
         Relationships: []
       }
@@ -6151,40 +6462,55 @@ export type Database = {
       }
       vw_stock: {
         Row: {
+          category: string[] | null
           closing_stock: number | null
           date: string | null
           item_name: string | null
           name: string | null
           opening_stock: number | null
+          ppn_type: string | null
           purchase_price: number | null
+          purchase_price_after_ppn: number | null
           quantity: number | null
           selling_price: number | null
+          selling_price_after_ppn: number | null
           stock_in: number | null
           stock_out: number | null
+          warehouse_location: string | null
         }
         Insert: {
+          category?: string[] | null
           closing_stock?: number | null
           date?: never
           item_name?: string | null
           name?: string | null
           opening_stock?: number | null
+          ppn_type?: string | null
           purchase_price?: number | null
+          purchase_price_after_ppn?: number | null
           quantity?: number | null
           selling_price?: number | null
+          selling_price_after_ppn?: number | null
           stock_in?: number | null
           stock_out?: number | null
+          warehouse_location?: string | null
         }
         Update: {
+          category?: string[] | null
           closing_stock?: number | null
           date?: never
           item_name?: string | null
           name?: string | null
           opening_stock?: number | null
+          ppn_type?: string | null
           purchase_price?: number | null
+          purchase_price_after_ppn?: number | null
           quantity?: number | null
           selling_price?: number | null
+          selling_price_after_ppn?: number | null
           stock_in?: number | null
           stock_out?: number | null
+          warehouse_location?: string | null
         }
         Relationships: []
       }
@@ -6197,6 +6523,18 @@ export type Database = {
       auto_post_jurnal_from_mutasi: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      calc_intracity_price: {
+        Args:
+          | { p_city: string; p_distance_km: number }
+          | { p_city: string; p_distance_km: number; p_weight: number }
+        Returns: {
+          applied_distance: number
+          base_price: number
+          rate_per_km: number
+          total_price: number
+          vehicle_type: string
+        }[]
       }
       calculate_rental_days: {
         Args: { end_date: string; start_date: string }
@@ -6228,6 +6566,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      determine_service_type: {
+        Args: {
+          p_distance: number
+          p_dropoff_city: string
+          p_dropoff_province: string
+          p_pickup_city: string
+          p_pickup_province: string
+        }
+        Returns: string
+      }
       find_uuid_in_tables: {
         Args: { search_value: string }
         Returns: {
@@ -6258,6 +6606,10 @@ export type Database = {
             }
           | { p_period: string }
         Returns: undefined
+      }
+      generate_supplier_code: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       get_account_id_from_service: {
         Args: { service: string }
@@ -6459,9 +6811,7 @@ export type Database = {
         Returns: Json
       }
       reject_topup: {
-        Args:
-          | { p_admin: string; p_reason: string; p_request_id: string }
-          | { p_reason: string; p_request_id: string }
+        Args: { p_admin?: string; p_reason?: string; p_request_id: string }
         Returns: undefined
       }
       resolve_ref_user_id: {
