@@ -1,3 +1,4 @@
+import { CartProvider } from "@/context/CartContext";
 import {
   createContext,
   useContext,

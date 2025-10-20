@@ -784,6 +784,7 @@ export type Database = {
       }
       bookings: {
         Row: {
+          actual_return_date: string | null
           amount: number | null
           bank_account: string | null
           booking_date: string | null
@@ -806,6 +807,8 @@ export type Database = {
           id: string
           is_backdated: boolean | null
           journal_entry_id: string | null
+          late_days: number | null
+          late_fee: number | null
           license_plate: string | null
           make: string | null
           model: string | null
@@ -845,6 +848,7 @@ export type Database = {
           with_driver: boolean | null
         }
         Insert: {
+          actual_return_date?: string | null
           amount?: number | null
           bank_account?: string | null
           booking_date?: string | null
@@ -867,6 +871,8 @@ export type Database = {
           id?: string
           is_backdated?: boolean | null
           journal_entry_id?: string | null
+          late_days?: number | null
+          late_fee?: number | null
           license_plate?: string | null
           make?: string | null
           model?: string | null
@@ -906,6 +912,7 @@ export type Database = {
           with_driver?: boolean | null
         }
         Update: {
+          actual_return_date?: string | null
           amount?: number | null
           bank_account?: string | null
           booking_date?: string | null
@@ -928,6 +935,8 @@ export type Database = {
           id?: string
           is_backdated?: boolean | null
           journal_entry_id?: string | null
+          late_days?: number | null
+          late_fee?: number | null
           license_plate?: string | null
           make?: string | null
           model?: string | null
@@ -5074,12 +5083,14 @@ export type Database = {
           closing_stock: number | null
           created_at: string | null
           created_by: string | null
+          date: string | null
           harga_beli_setelah_ppn: number | null
           harga_jual_setelah_ppn: number | null
           id: string
           item_code: string | null
           item_name: string
           location: string | null
+          min_stock: number | null
           model: string | null
           name: string
           opening_stock: number | null
@@ -5090,9 +5101,12 @@ export type Database = {
           ppn_type: string
           purchase_price: number
           quantity: number
+          requester_id: string | null
           selling_price: number
+          stock_code: string | null
           stock_in: number | null
           stock_out: number | null
+          supplier_name: string | null
           unit: string | null
           updated_at: string | null
           vehicle_type: string | null
@@ -5105,12 +5119,14 @@ export type Database = {
           closing_stock?: number | null
           created_at?: string | null
           created_by?: string | null
+          date?: string | null
           harga_beli_setelah_ppn?: number | null
           harga_jual_setelah_ppn?: number | null
           id?: string
           item_code?: string | null
           item_name: string
           location?: string | null
+          min_stock?: number | null
           model?: string | null
           name: string
           opening_stock?: number | null
@@ -5121,9 +5137,12 @@ export type Database = {
           ppn_type?: string
           purchase_price?: number
           quantity?: number
+          requester_id?: string | null
           selling_price?: number
+          stock_code?: string | null
           stock_in?: number | null
           stock_out?: number | null
+          supplier_name?: string | null
           unit?: string | null
           updated_at?: string | null
           vehicle_type?: string | null
@@ -5136,12 +5155,14 @@ export type Database = {
           closing_stock?: number | null
           created_at?: string | null
           created_by?: string | null
+          date?: string | null
           harga_beli_setelah_ppn?: number | null
           harga_jual_setelah_ppn?: number | null
           id?: string
           item_code?: string | null
           item_name?: string
           location?: string | null
+          min_stock?: number | null
           model?: string | null
           name?: string
           opening_stock?: number | null
@@ -5152,9 +5173,12 @@ export type Database = {
           ppn_type?: string
           purchase_price?: number
           quantity?: number
+          requester_id?: string | null
           selling_price?: number
+          stock_code?: string | null
           stock_in?: number | null
           stock_out?: number | null
+          supplier_name?: string | null
           unit?: string | null
           updated_at?: string | null
           vehicle_type?: string | null
@@ -6462,10 +6486,12 @@ export type Database = {
       }
       vw_stock: {
         Row: {
+          barcode: string | null
           category: string[] | null
           closing_stock: number | null
           date: string | null
           item_name: string | null
+          min_stock: number | null
           name: string | null
           opening_stock: number | null
           ppn_type: string | null
@@ -6476,13 +6502,16 @@ export type Database = {
           selling_price_after_ppn: number | null
           stock_in: number | null
           stock_out: number | null
+          unit: string | null
           warehouse_location: string | null
         }
         Insert: {
+          barcode?: string | null
           category?: string[] | null
           closing_stock?: number | null
           date?: never
           item_name?: string | null
+          min_stock?: number | null
           name?: string | null
           opening_stock?: number | null
           ppn_type?: string | null
@@ -6493,13 +6522,16 @@ export type Database = {
           selling_price_after_ppn?: number | null
           stock_in?: number | null
           stock_out?: number | null
+          unit?: string | null
           warehouse_location?: string | null
         }
         Update: {
+          barcode?: string | null
           category?: string[] | null
           closing_stock?: number | null
           date?: never
           item_name?: string | null
+          min_stock?: number | null
           name?: string | null
           opening_stock?: number | null
           ppn_type?: string | null
@@ -6510,6 +6542,7 @@ export type Database = {
           selling_price_after_ppn?: number | null
           stock_in?: number | null
           stock_out?: number | null
+          unit?: string | null
           warehouse_location?: string | null
         }
         Relationships: []
@@ -6583,6 +6616,10 @@ export type Database = {
           found_schema: string
           found_table: string
         }[]
+      }
+      gen_stock_code: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       generate_balance_sheet: {
         Args: { p_period: string }
@@ -6720,6 +6757,10 @@ export type Database = {
       is_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      mark_overdue_bookings: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       my_function: {
         Args: Record<PropertyKey, never>
@@ -6861,6 +6902,82 @@ export type Database = {
       upsert_ledger_summaries: {
         Args: { payload: Json } | { payload: string }
         Returns: undefined
+      }
+      upsert_stock: {
+        Args: {
+          p_brand: string[]
+          p_category: string[]
+          p_created_by: string
+          p_harga_beli_setelah_ppn: number
+          p_harga_jual_setelah_ppn: number
+          p_item_name: string
+          p_location: string
+          p_model: string
+          p_name: string
+          p_part_number: string
+          p_plate_number: string
+          p_ppn_beli: number
+          p_ppn_jual: number
+          p_ppn_type: string
+          p_purchase_price: number
+          p_quantity: number
+          p_selling_price: number
+          p_supplier_name: string
+          p_unit: string
+          p_vehicle_type: string
+          p_warehouse_location: string
+        }
+        Returns: undefined
+      }
+      upsert_stock_by_code_or_barcode: {
+        Args: {
+          p_barcode: string
+          p_category: string
+          p_name: string
+          p_ppn: string
+          p_purchase: number
+          p_qty: number
+          p_selling: number
+          p_stock_code: string
+          p_unit: string
+          p_wh_id: string
+        }
+        Returns: {
+          barcode: string | null
+          brand: string[] | null
+          category: string[] | null
+          closing_stock: number | null
+          created_at: string | null
+          created_by: string | null
+          date: string | null
+          harga_beli_setelah_ppn: number | null
+          harga_jual_setelah_ppn: number | null
+          id: string
+          item_code: string | null
+          item_name: string
+          location: string | null
+          min_stock: number | null
+          model: string | null
+          name: string
+          opening_stock: number | null
+          part_number: string | null
+          plate_number: string | null
+          ppn_beli: number | null
+          ppn_jual: number | null
+          ppn_type: string
+          purchase_price: number
+          quantity: number
+          requester_id: string | null
+          selling_price: number
+          stock_code: string | null
+          stock_in: number | null
+          stock_out: number | null
+          supplier_name: string | null
+          unit: string | null
+          updated_at: string | null
+          vehicle_type: string | null
+          warehouse_location: string
+        }
       }
       upsert_trial_balance_for_period: {
         Args: { p_period: string }

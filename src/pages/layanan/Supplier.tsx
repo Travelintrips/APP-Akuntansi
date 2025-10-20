@@ -15,7 +15,7 @@ interface SupplierForm {
   supplier_code: string;
   supplier_name: string;
   contact_person: string;
-  phone: string;
+  phone_number: string;
   email: string;
   address: string;
   city: string;
@@ -67,7 +67,7 @@ const Supplier = () => {
     supplier_code: "",
     supplier_name: "",
     contact_person: "",
-    phone: "",
+    phone_number: "",
     email: "",
     address: "",
     city: "",
@@ -116,9 +116,9 @@ const Supplier = () => {
     return emailRegex.test(email);
   };
 
-  const validatePhone = (phone: string) => {
+  const validatePhone = (phone_number: string) => {
     const phoneRegex = /^[0-9+\-\s()]+$/;
-    return phoneRegex.test(phone);
+    return phoneRegex.test(phone_number);
   };
 
   const updateFormData = (field: keyof SupplierForm, value: any) => {
@@ -158,7 +158,7 @@ const Supplier = () => {
         return;
       }
 
-      if (formData.phone && !validatePhone(formData.phone)) {
+      if (formData.phone_number && !validatePhone(formData.phone_number)) {
         toast({
           title: "Error",
           description: "Phone harus berisi angka, +, -, (, ), atau spasi",
@@ -205,7 +205,7 @@ const Supplier = () => {
         supplier_code: "",
         supplier_name: "",
         contact_person: "",
-        phone: "",
+        phone_number: "",
         email: "",
         address: "",
         city: "",
@@ -286,11 +286,11 @@ const Supplier = () => {
               </div>
 
               <div>
-                <Label htmlFor="phone">Phone</Label>
+                <Label htmlFor="phone_number">Phone</Label>
                 <Input
-                  id="phone"
-                  value={formData.phone}
-                  onChange={(e) => updateFormData("phone", e.target.value)}
+                  id="phone_number"
+                  value={formData.phone_number}
+                  onChange={(e) => updateFormData("phone_number", e.target.value)}
                   placeholder="Masukkan nomor telepon"
                 />
               </div>
@@ -473,7 +473,7 @@ const Supplier = () => {
                         <TableCell className="font-medium">{supplier.supplier_code}</TableCell>
                         <TableCell>{supplier.supplier_name}</TableCell>
                         <TableCell>{supplier.contact_person || "-"}</TableCell>
-                        <TableCell>{supplier.phone || "-"}</TableCell>
+                        <TableCell>{supplier.phone_number || "-"}</TableCell>
                         <TableCell>{supplier.email || "-"}</TableCell>
                         <TableCell>{supplier.category?.[0] || "-"}</TableCell>
                         <TableCell>

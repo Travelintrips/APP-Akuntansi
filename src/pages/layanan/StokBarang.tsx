@@ -1,10 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BrowserMultiFormatReader } from "@zxing/browser";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ArrowLeft, Camera } from "lucide-react";
 import supabase from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
 import { Link } from "react-router-dom";
@@ -16,6 +23,10 @@ interface StockForm {
   part_number: string;
   item_name: string;
   unit: string;
+  supplier_name: string;
+  supplier_contact_person: string;
+  supplier_phone: string;
+  supplier_email: string;
   brand: string;
   model: string;
   vehicle_type: string;
@@ -31,44 +42,100 @@ interface StockForm {
   harga_jual_setelah_ppn: string;
 }
 
+interface Supplier {
+  id: string;
+  supplier_name: string;
+  contact_person: string;
+  phone_number: string;
+  email: string;
+  status: string;
+}
+
+export function CameraBarcodeScanner({
+  onDetected,
+  active = true,
+}: {
+  onDetected: (code: string) => void;
+  active?: boolean;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [status, setStatus] = useState("Arahkan kamera ke barcode...");
+  const [lastCode, setLastCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!active) return; // hanya aktif jika modal terbuka
+
+    const reader = new BrowserMultiFormatReader();
+    let controls: { stop: () => void } | null = null;
+
+    reader
+      .decodeFromVideoDevice(null, videoRef.current!, (result, err) => {
+        if (result) {
+          const code = result.getText();
+          if (code !== lastCode) {
+            setLastCode(code);
+            setStatus(`✅ Barcode terdeteksi: ${code}`);
+            onDetected(code);
+          }
+        }
+      })
+      .then((ctrl) => {
+        controls = ctrl;
+      })
+      .catch((err) => console.error("Camera error:", err));
+
+    // ✅ cleanup aman — tanpa reader.reset()
+    return () => {
+      if (controls && typeof controls.stop === "function") {
+        controls.stop();
+        console.log("📷 Kamera dimatikan dengan aman");
+      }
+    };
+  }, [active]); // kamera hidup/mati tergantung state modal
+
+  return (
+    <div className="border rounded-lg bg-gray-50 mt-3 p-2 space-y-2">
+      <video ref={videoRef} className="w-full rounded-md" muted playsInline />
+      <p className="text-sm text-gray-600">{status}</p>
+      {lastCode && (
+        <p className="text-green-700 text-sm font-mono">{lastCode}</p>
+      )}
+    </div>
+  );
+}
+
 const STOCK_CATEGORIES = [
-  "Raw Materials",
-  "Work-In-Process (WIP)",
-  "Finished Goods",
-  "Resale/Merchandise",
-  "Kits/Bundles",
-  "Spare Parts",
-  "MRO",
-  "Consumables",
-  "Packaging",
-  "Food",
-  "Beverages",
-  "Rentable Units",
-  "Demo/Loaner Units",
-  "Returns",
-  "Defective/Damaged",
-  "Obsolete/Expired",
-  "Goods In Transit",
-  "Consignment",
-  "Third-Party Owned",
-  "Samples/Marketing"
+  { value: "Raw Materials", label: "Bahan Baku" },
+  { value: "Work-In-Process (WIP)", label: "Barang Dalam Proses (WIP)" },
+  { value: "Finished Goods", label: "Barang Jadi" },
+  { value: "Resale/Merchandise", label: "Barang Dagangan" },
+  { value: "Kits/Bundles", label: "Paket/Bundle" },
+  { value: "Spare Parts", label: "Suku Cadang" },
+  { value: "MRO", label: "MRO (Perlengkapan Operasional)" },
+  { value: "Consumables", label: "Barang Habis Pakai" },
+  { value: "Packaging", label: "Kemasan" },
+  { value: "Food", label: "Makanan" },
+  { value: "Beverages", label: "Minuman" },
+  { value: "Rentable Units", label: "Unit Disewakan" },
+  { value: "Demo/Loaner Units", label: "Unit Demo/Pinjaman" },
+  { value: "Returns", label: "Retur" },
+  { value: "Defective/Damaged", label: "Cacat/Rusak" },
+  { value: "Obsolete/Expired", label: "Kedaluwarsa/Usang" },
+  { value: "Goods In Transit", label: "Barang Dalam Perjalanan" },
+  { value: "Consignment", label: "Titipan (Konsinyasi)" },
+  { value: "Third-Party Owned", label: "Milik Pihak Ketiga" },
+  { value: "Samples/Marketing", label: "Sampel/Marketing" },
 ];
 
-const WAREHOUSE_LOCATIONS = [
-  "Kebon Jeruk",
-  "Sport Center",
-  "Pool"
-];
+const WAREHOUSE_LOCATIONS = ["Kebon Jeruk", "Sport Center", "Pool"];
 
-const PPN_TYPES = [
-  "Non PPN",
-  "PPN"
-];
+const PPN_TYPES = ["Non PPN", "PPN"];
 
 const StokBarang = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+
   const [formData, setFormData] = useState<StockForm>({
     name: "",
     category: "",
@@ -76,6 +143,10 @@ const StokBarang = () => {
     part_number: "",
     item_name: "",
     unit: "",
+    supplier_name: "",
+    supplier_contact_person: "",
+    supplier_phone: "",
+    supplier_email: "",
     brand: "",
     model: "",
     vehicle_type: "",
@@ -96,18 +167,22 @@ const StokBarang = () => {
   const [ppnBeliNum, setPpnBeliNum] = useState(0);
   const [sellingPriceNum, setSellingPriceNum] = useState(0);
   const [ppnJualNum, setPpnJualNum] = useState(0);
+  const [isScanning, setIsScanning] = useState(false);
 
-  // Load user data on component mount
+  // Load user data and suppliers on component mount
   useEffect(() => {
     const loadUserData = async () => {
       try {
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
         if (userError || !user) return;
 
         const { data: userData, error: profileError } = await supabase
-          .from('users')
-          .select('full_name')
-          .eq('id', user.id)
+          .from("users")
+          .select("full_name")
+          .eq("id", user.id)
           .single();
 
         if (profileError) {
@@ -116,9 +191,9 @@ const StokBarang = () => {
         }
 
         if (userData) {
-          setFormData(prev => ({
+          setFormData((prev) => ({
             ...prev,
-            name: userData.full_name || ""
+            name: userData.full_name || "",
           }));
         }
       } catch (error) {
@@ -126,78 +201,121 @@ const StokBarang = () => {
       }
     };
 
+    const fetchSuppliers = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("suppliers")
+          .select(
+            "id, supplier_name, contact_person, phone_number, email, status",
+          )
+          .eq("status", "ACTIVE")
+          .order("supplier_name", { ascending: true });
+
+        if (error) throw error;
+        setSuppliers(data || []);
+      } catch (error) {
+        console.error("Error fetching suppliers:", error);
+      }
+    };
+
     loadUserData();
+    fetchSuppliers();
   }, []);
 
   const formatCurrency = (num: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      maximumFractionDigits: 0
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      maximumFractionDigits: 0,
     }).format(num);
   };
 
   const handlePurchasePriceChange = (value: string) => {
-    const num = Number(value.replace(/\D/g, ''));
+    const num = Number(value.replace(/\D/g, ""));
     setPurchasePriceNum(num);
     const formattedValue = formatCurrency(num);
     const hargaBeliSetelahPpn = num + ppnBeliNum;
-    
-    setFormData(prev => ({
+
+    setFormData((prev) => ({
       ...prev,
       purchase_price: formattedValue,
-      harga_beli_setelah_ppn: formatCurrency(hargaBeliSetelahPpn)
+      harga_beli_setelah_ppn: formatCurrency(hargaBeliSetelahPpn),
     }));
   };
 
   const handlePpnBeliChange = (value: string) => {
-    const num = Number(value.replace(/\D/g, ''));
+    const num = Number(value.replace(/\D/g, ""));
     setPpnBeliNum(num);
     const formattedValue = formatCurrency(num);
     const hargaBeliSetelahPpn = purchasePriceNum + num;
-    
-    setFormData(prev => ({
+
+    setFormData((prev) => ({
       ...prev,
       ppn_beli: formattedValue,
-      harga_beli_setelah_ppn: formatCurrency(hargaBeliSetelahPpn)
+      harga_beli_setelah_ppn: formatCurrency(hargaBeliSetelahPpn),
     }));
   };
 
   const handleSellingPriceChange = (value: string) => {
-    const num = Number(value.replace(/\D/g, ''));
+    const num = Number(value.replace(/\D/g, ""));
     setSellingPriceNum(num);
     const formattedValue = formatCurrency(num);
     const hargaJualSetelahPpn = num + ppnJualNum;
-    
-    setFormData(prev => ({
+
+    setFormData((prev) => ({
       ...prev,
       selling_price: formattedValue,
-      harga_jual_setelah_ppn: formatCurrency(hargaJualSetelahPpn)
+      harga_jual_setelah_ppn: formatCurrency(hargaJualSetelahPpn),
     }));
   };
 
   const handlePpnJualChange = (value: string) => {
-    const num = Number(value.replace(/\D/g, ''));
+    const num = Number(value.replace(/\D/g, ""));
     setPpnJualNum(num);
     const formattedValue = formatCurrency(num);
     const hargaJualSetelahPpn = sellingPriceNum + num;
-    
-    setFormData(prev => ({
+
+    setFormData((prev) => ({
       ...prev,
       ppn_jual: formattedValue,
-      harga_jual_setelah_ppn: formatCurrency(hargaJualSetelahPpn)
+      harga_jual_setelah_ppn: formatCurrency(hargaJualSetelahPpn),
     }));
   };
 
   const updateFormData = (field: keyof StockForm, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSupplierChange = (supplierName: string) => {
+    const selected = suppliers.find((s) => s.supplier_name === supplierName);
+
+    if (selected) {
+      setFormData((prev) => ({
+        ...prev,
+        supplier_name: supplierName,
+        supplier_contact_person: selected.contact_person || "",
+        supplier_phone: selected.phone_number || "",
+        supplier_email: selected.email || "",
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        supplier_name: supplierName,
+        supplier_contact_person: "",
+        supplier_phone: "",
+        supplier_email: "",
+      }));
+    }
   };
 
   const handleSave = async () => {
     try {
       setLoading(true);
 
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
       if (userError || !user) {
         toast({
           title: "Error",
@@ -255,7 +373,11 @@ const StokBarang = () => {
       }
 
       // Validate brand for Resale and Consumables category
-      if ((formData.category === "Resale" || formData.category === "Consumables") && !formData.brand.trim()) {
+      if (
+        (formData.category === "Resale" ||
+          formData.category === "Consumables") &&
+        !formData.brand.trim()
+      ) {
         toast({
           title: "Error",
           description: "Brand harus diisi untuk kategori " + formData.category,
@@ -265,10 +387,14 @@ const StokBarang = () => {
       }
 
       // Validate location for Maintenance/Repair/Operations category
-      if (formData.category === "Maintenance/Repair/Operations" && !formData.location.trim()) {
+      if (
+        formData.category === "Maintenance/Repair/Operations" &&
+        !formData.location.trim()
+      ) {
         toast({
           title: "Error",
-          description: "Lokasi harus diisi untuk kategori Maintenance/Repair/Operations",
+          description:
+            "Lokasi harus diisi untuk kategori Maintenance/Repair/Operations",
           variant: "destructive",
         });
         return;
@@ -295,7 +421,8 @@ const StokBarang = () => {
         if (!formData.vehicle_type.trim()) {
           toast({
             title: "Error",
-            description: "Vehicle Type harus diisi untuk kategori Rentable Units",
+            description:
+              "Vehicle Type harus diisi untuk kategori Rentable Units",
             variant: "destructive",
           });
           return;
@@ -303,7 +430,8 @@ const StokBarang = () => {
         if (!formData.plate_number.trim()) {
           toast({
             title: "Error",
-            description: "Plate Number harus diisi untuk kategori Rentable Units",
+            description:
+              "Plate Number harus diisi untuk kategori Rentable Units",
             variant: "destructive",
           });
           return;
@@ -329,7 +457,13 @@ const StokBarang = () => {
       }
 
       // Validate selling price only if not Spare Parts, Maintenance/Repair/Operations, Consumables, or Rentable Units
-      if (formData.category !== "Spare Parts" && formData.category !== "Maintenance/Repair/Operations" && formData.category !== "Consumables" && formData.category !== "Rentable Units" && sellingPriceNum <= 0) {
+      if (
+        formData.category !== "Spare Parts" &&
+        formData.category !== "Maintenance/Repair/Operations" &&
+        formData.category !== "Consumables" &&
+        formData.category !== "Rentable Units" &&
+        sellingPriceNum <= 0
+      ) {
         toast({
           title: "Error",
           description: "Harga jual harus lebih dari 0",
@@ -344,6 +478,7 @@ const StokBarang = () => {
         warehouse_location: formData.warehouse_location,
         item_name: formData.item_name,
         unit: formData.unit,
+        supplier_name: formData.supplier_name || null,
         quantity: formData.quantity,
         ppn_type: formData.ppn_type,
         purchase_price: purchasePriceNum,
@@ -354,9 +489,14 @@ const StokBarang = () => {
       if (formData.ppn_type === "PPN") {
         stockData.ppn_beli = ppnBeliNum;
         stockData.harga_beli_setelah_ppn = purchasePriceNum + ppnBeliNum;
-        
+
         // Only add PPN jual if category requires selling price
-        if (formData.category !== "Spare Parts" && formData.category !== "Maintenance/Repair/Operations" && formData.category !== "Consumables" && formData.category !== "Rentable Units") {
+        if (
+          formData.category !== "Spare Parts" &&
+          formData.category !== "Maintenance/Repair/Operations" &&
+          formData.category !== "Consumables" &&
+          formData.category !== "Rentable Units"
+        ) {
           stockData.ppn_jual = ppnJualNum;
           stockData.harga_jual_setelah_ppn = sellingPriceNum + ppnJualNum;
         }
@@ -368,12 +508,19 @@ const StokBarang = () => {
       }
 
       // Add brand for Resale and Consumables category
-      if ((formData.category === "Resale" || formData.category === "Consumables") && formData.brand.trim()) {
+      if (
+        (formData.category === "Resale" ||
+          formData.category === "Consumables") &&
+        formData.brand.trim()
+      ) {
         stockData.brand = [formData.brand];
       }
 
       // Add location for Maintenance/Repair/Operations category
-      if (formData.category === "Maintenance/Repair/Operations" && formData.location.trim()) {
+      if (
+        formData.category === "Maintenance/Repair/Operations" &&
+        formData.location.trim()
+      ) {
         stockData.location = formData.location;
       }
 
@@ -386,16 +533,39 @@ const StokBarang = () => {
       }
 
       // Add selling_price only if not Spare Parts, Maintenance/Repair/Operations, Consumables, or Rentable Units
-      if (formData.category !== "Spare Parts" && formData.category !== "Maintenance/Repair/Operations" && formData.category !== "Consumables" && formData.category !== "Rentable Units") {
+      if (
+        formData.category !== "Spare Parts" &&
+        formData.category !== "Maintenance/Repair/Operations" &&
+        formData.category !== "Consumables" &&
+        formData.category !== "Rentable Units"
+      ) {
         stockData.selling_price = sellingPriceNum;
       }
 
-      const { error } = await supabase
-        .from('stock')
-        .upsert([stockData], {
-          onConflict: 'item_name',
-          ignoreDuplicates: false
-        });
+      // Use raw SQL with ON CONFLICT
+      const { error } = await supabase.rpc("upsert_stock", {
+        p_name: stockData.name,
+        p_category: stockData.category,
+        p_warehouse_location: stockData.warehouse_location,
+        p_item_name: stockData.item_name,
+        p_unit: stockData.unit,
+        p_supplier_name: stockData.supplier_name,
+        p_quantity: Number(stockData.quantity ?? 0),
+        p_ppn_type: stockData.ppn_type,
+        p_purchase_price: stockData.purchase_price,
+        p_ppn_beli: stockData.ppn_beli || null,
+        p_harga_beli_setelah_ppn: stockData.harga_beli_setelah_ppn || null,
+        p_selling_price: stockData.selling_price || null,
+        p_ppn_jual: stockData.ppn_jual || null,
+        p_harga_jual_setelah_ppn: stockData.harga_jual_setelah_ppn || null,
+        p_part_number: stockData.part_number || null,
+        p_brand: stockData.brand || null,
+        p_location: stockData.location || null,
+        p_model: stockData.model || null,
+        p_vehicle_type: stockData.vehicle_type || null,
+        p_plate_number: stockData.plate_number || null,
+        p_created_by: user.id,
+      });
 
       if (error) {
         console.error("Database Error:", error);
@@ -413,13 +583,17 @@ const StokBarang = () => {
       });
 
       // Reset form (keep name)
-      setFormData(prev => ({
+      setFormData((prev) => ({
         name: prev.name,
         category: "",
         warehouse_location: "",
         part_number: "",
         item_name: "",
         unit: "",
+        supplier_name: "",
+        supplier_contact_person: "",
+        supplier_phone: "",
+        supplier_email: "",
         brand: "",
         model: "",
         vehicle_type: "",
@@ -438,7 +612,6 @@ const StokBarang = () => {
       setPpnBeliNum(0);
       setSellingPriceNum(0);
       setPpnJualNum(0);
-
     } catch (error) {
       console.error("Error saving stock:", error);
       toast({
@@ -479,18 +652,21 @@ const StokBarang = () => {
             </div>
 
             <div>
-              <Label htmlFor="category">Kategori Stok</Label>
+              <Label htmlFor="category">
+                Kategori Stok <span className="text-red-500">*</span>
+              </Label>
               <Select
                 value={formData.category}
                 onValueChange={(value) => updateFormData("category", value)}
+                required
               >
                 <SelectTrigger id="category">
-                  <SelectValue placeholder="Pilih kategori stok" />
+                  <SelectValue placeholder="Pilih kategori" />
                 </SelectTrigger>
                 <SelectContent>
                   {STOCK_CATEGORIES.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
+                    <SelectItem key={category.value} value={category.value}>
+                      {category.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -498,10 +674,14 @@ const StokBarang = () => {
             </div>
 
             <div>
-              <Label htmlFor="warehouse_location">Lokasi Gudang <span className="text-red-500">*</span></Label>
+              <Label htmlFor="warehouse_location">
+                Lokasi Gudang <span className="text-red-500">*</span>
+              </Label>
               <Select
                 value={formData.warehouse_location}
-                onValueChange={(value) => updateFormData("warehouse_location", value)}
+                onValueChange={(value) =>
+                  updateFormData("warehouse_location", value)
+                }
               >
                 <SelectTrigger id="warehouse_location">
                   <SelectValue placeholder="Pilih lokasi gudang" />
@@ -522,7 +702,9 @@ const StokBarang = () => {
                 <Input
                   id="part_number"
                   value={formData.part_number}
-                  onChange={(e) => updateFormData("part_number", e.target.value)}
+                  onChange={(e) =>
+                    updateFormData("part_number", e.target.value)
+                  }
                   placeholder="Masukkan part number"
                 />
               </div>
@@ -546,10 +728,118 @@ const StokBarang = () => {
                 onChange={(e) => updateFormData("unit", e.target.value)}
                 placeholder="Masukkan unit"
               />
-              <p className="text-sm text-gray-500 mt-1">Contoh: botol, pack, pcs, dll.</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Contoh: botol, pack, pcs, dll.
+              </p>
             </div>
 
-            {(formData.category === "Resale" || formData.category === "Consumables" || formData.category === "Rentable Units") && (
+            <div className="mt-4">
+              <Label className="text-sm font-medium">
+                Scan Barcode (Opsional)
+              </Label>
+
+              {!isScanning ? (
+                <Button
+                  variant="outline"
+                  className="mt-2"
+                  onClick={() => setIsScanning(true)}
+                >
+                  <Camera className="w-4 h-4 mr-2" />
+                  Mulai Scan Barcode
+                </Button>
+              ) : (
+                <>
+                  <CameraBarcodeScanner
+                    active={isScanning}
+                    onDetected={(detectedBarcode) => {
+                      console.log("✅ Barcode terdeteksi:", detectedBarcode);
+                      updateFormData("part_number", detectedBarcode);
+                      setIsScanning(false);
+                    }}
+                  />
+                  <Button
+                    variant="destructive"
+                    className="mt-2"
+                    onClick={() => setIsScanning(false)}
+                  >
+                    Stop Kamera
+                  </Button>
+                </>
+              )}
+
+              {formData.part_number && (
+                <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                  <p className="text-sm text-green-700">
+                    Barcode:{" "}
+                    <span className="font-mono font-bold">
+                      {formData.part_number}
+                    </span>
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Label htmlFor="supplier_name">Supplier</Label>
+              <Select
+                value={formData.supplier_name}
+                onValueChange={handleSupplierChange}
+              >
+                <SelectTrigger id="supplier_name">
+                  <SelectValue placeholder="Pilih supplier" />
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers.map((supplier) => (
+                    <SelectItem
+                      key={supplier.id}
+                      value={supplier.supplier_name}
+                    >
+                      {supplier.supplier_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {formData.supplier_name && (
+              <>
+                <div>
+                  <Label htmlFor="supplier_contact_person">
+                    Contact Person
+                  </Label>
+                  <Input
+                    id="supplier_contact_person"
+                    value={formData.supplier_contact_person}
+                    disabled
+                    className="bg-gray-50"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="supplier_phone">Phone</Label>
+                  <Input
+                    id="supplier_phone"
+                    value={formData.supplier_phone}
+                    disabled
+                    className="bg-gray-50"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="supplier_email">Email</Label>
+                  <Input
+                    id="supplier_email"
+                    value={formData.supplier_email}
+                    disabled
+                    className="bg-gray-50"
+                  />
+                </div>
+              </>
+            )}
+
+            {(formData.category === "Resale" ||
+              formData.category === "Consumables" ||
+              formData.category === "Rentable Units") && (
               <div>
                 <Label htmlFor="brand">Brand</Label>
                 <Input
@@ -578,7 +868,9 @@ const StokBarang = () => {
                   <Input
                     id="vehicle_type"
                     value={formData.vehicle_type}
-                    onChange={(e) => updateFormData("vehicle_type", e.target.value)}
+                    onChange={(e) =>
+                      updateFormData("vehicle_type", e.target.value)
+                    }
                     placeholder="Masukkan vehicle type"
                   />
                 </div>
@@ -588,7 +880,9 @@ const StokBarang = () => {
                   <Input
                     id="plate_number"
                     value={formData.plate_number}
-                    onChange={(e) => updateFormData("plate_number", e.target.value)}
+                    onChange={(e) =>
+                      updateFormData("plate_number", e.target.value)
+                    }
                     placeholder="Masukkan plate number"
                   />
                 </div>
@@ -613,8 +907,11 @@ const StokBarang = () => {
                 id="quantity"
                 type="number"
                 min="0"
-                value={formData.quantity}
-                onChange={(e) => updateFormData("quantity", parseInt(e.target.value) || 0)}
+                value={formData.quantity ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  updateFormData("quantity", val ? Number(val) : null);
+                }}
               />
             </div>
 
@@ -662,7 +959,9 @@ const StokBarang = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="harga_beli_setelah_ppn">Harga Beli (setelah PPN)</Label>
+                  <Label htmlFor="harga_beli_setelah_ppn">
+                    Harga Beli (setelah PPN)
+                  </Label>
                   <Input
                     id="harga_beli_setelah_ppn"
                     type="text"
@@ -674,49 +973,59 @@ const StokBarang = () => {
               </>
             )}
 
-            {formData.category !== "Spare Parts" && formData.category !== "Maintenance/Repair/Operations" && formData.category !== "Consumables" && formData.category !== "Rentable Units" && (
-              <>
-                <div>
-                  <Label htmlFor="selling_price">Harga Jual</Label>
-                  <Input
-                    id="selling_price"
-                    type="text"
-                    value={formData.selling_price}
-                    onChange={(e) => handleSellingPriceChange(e.target.value)}
-                    placeholder="Rp 0"
-                  />
-                </div>
+            {formData.category !== "Spare Parts" &&
+              formData.category !== "Maintenance/Repair/Operations" &&
+              formData.category !== "Consumables" &&
+              formData.category !== "Rentable Units" && (
+                <>
+                  <div>
+                    <Label htmlFor="selling_price">Harga Jual</Label>
+                    <Input
+                      id="selling_price"
+                      type="text"
+                      value={formData.selling_price}
+                      onChange={(e) => handleSellingPriceChange(e.target.value)}
+                      placeholder="Rp 0"
+                    />
+                  </div>
 
-                {formData.ppn_type === "PPN" && (
-                  <>
-                    <div>
-                      <Label htmlFor="ppn_jual">PPN Jual</Label>
-                      <Input
-                        id="ppn_jual"
-                        type="text"
-                        value={formData.ppn_jual}
-                        onChange={(e) => handlePpnJualChange(e.target.value)}
-                        placeholder="Rp 0"
-                      />
-                    </div>
+                  {formData.ppn_type === "PPN" && (
+                    <>
+                      <div>
+                        <Label htmlFor="ppn_jual">PPN Jual</Label>
+                        <Input
+                          id="ppn_jual"
+                          type="text"
+                          value={formData.ppn_jual}
+                          onChange={(e) => handlePpnJualChange(e.target.value)}
+                          placeholder="Rp 0"
+                        />
+                      </div>
 
-                    <div>
-                      <Label htmlFor="harga_jual_setelah_ppn">Harga Jual (setelah PPN)</Label>
-                      <Input
-                        id="harga_jual_setelah_ppn"
-                        type="text"
-                        value={formData.harga_jual_setelah_ppn}
-                        disabled
-                        className="bg-gray-50"
-                      />
-                    </div>
-                  </>
-                )}
-              </>
-            )}
+                      <div>
+                        <Label htmlFor="harga_jual_setelah_ppn">
+                          Harga Jual (setelah PPN)
+                        </Label>
+                        <Input
+                          id="harga_jual_setelah_ppn"
+                          type="text"
+                          value={formData.harga_jual_setelah_ppn}
+                          disabled
+                          className="bg-gray-50"
+                        />
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
 
             <div className="pt-4">
-              <Button onClick={handleSave} disabled={loading} size="lg" className="w-full">
+              <Button
+                onClick={handleSave}
+                disabled={loading}
+                size="lg"
+                className="w-full"
+              >
                 {loading ? "Menyimpan..." : "Simpan"}
               </Button>
             </div>

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BrowserMultiFormatReader } from "@zxing/browser";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Upload, X } from "lucide-react";
+import { ArrowLeft, Upload, X, Camera } from "lucide-react";
 import supabase from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
 import { Link } from "react-router-dom";
@@ -19,6 +20,60 @@ interface PurchaseRequestForm {
   tax: string;
   shipping_cost: string;
   total_amount: string;
+  barcode: string;
+}
+
+export function CameraBarcodeScanner({
+  onDetected,
+  active = true,
+}: {
+  onDetected: (code: string) => void;
+  active?: boolean;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [status, setStatus] = useState("Arahkan kamera ke barcode...");
+  const [lastCode, setLastCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!active) return; // hanya aktif jika modal terbuka
+
+    const reader = new BrowserMultiFormatReader();
+    let controls: { stop: () => void } | null = null;
+
+    reader
+      .decodeFromVideoDevice(null, videoRef.current!, (result, err) => {
+        if (result) {
+          const code = result.getText();
+          if (code !== lastCode) {
+            setLastCode(code);
+            setStatus(`✅ Barcode terdeteksi: ${code}`);
+            onDetected(code);
+          }
+        }
+      })
+      .then((ctrl) => {
+        controls = ctrl;
+      })
+      .catch((err) => console.error("Camera error:", err));
+
+    // ✅ cleanup aman — tanpa reader.reset()
+    return () => {
+      if (controls && typeof controls.stop === "function") {
+        controls.stop();
+        console.log("📷 Kamera dimatikan dengan aman");
+      }
+    };
+  }, [active]); // kamera hidup/mati tergantung state modal
+
+  return (
+    <div className="border rounded-lg bg-gray-50 mt-3 p-2 space-y-2">
+      <video ref={videoRef} className="w-full rounded-md" muted playsInline />
+      <p className="text-sm text-gray-600">{status}</p>
+      {lastCode && (
+        <p className="text-green-700 text-sm font-mono">{lastCode}</p>
+      )}
+    </div>
+  );
 }
 
 const PengajuanPembelian = () => {
@@ -28,12 +83,14 @@ const PengajuanPembelian = () => {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
 
   const [formData, setFormData] = useState<PurchaseRequestForm>({
     request_date: new Date().toISOString().split("T")[0],
     name: "",
     email: "",
     item_name: "",
+    barcode: "",
     qty: 1,
     unit_price: "Rp 0",
     tax: "Rp 0",
@@ -92,8 +149,13 @@ const PengajuanPembelian = () => {
     }).format(num);
   };
 
-  const calculateTotal = (qty: number, unitPrice: number, tax: number, shipping: number) => {
-    return (qty * unitPrice) + tax + shipping;
+  const calculateTotal = (
+    qty: number,
+    unitPrice: number,
+    tax: number,
+    shipping: number,
+  ) => {
+    return qty * unitPrice + tax + shipping;
   };
 
   const handleUnitPriceChange = (value: string) => {
@@ -247,6 +309,7 @@ const PengajuanPembelian = () => {
         name: formData.name,
         email: formData.email,
         item_name: formData.item_name,
+        barcode: formData.barcode,
         qty: qtyNum,
         unit_price: unitPriceNum,
         tax: taxNum,
@@ -283,6 +346,7 @@ const PengajuanPembelian = () => {
         name: prev.name,
         email: prev.email,
         item_name: "",
+        barcode: "",
         qty: 1,
         unit_price: "Rp 0",
         tax: "Rp 0",
@@ -353,6 +417,52 @@ const PengajuanPembelian = () => {
                 onChange={(e) => updateFormData("item_name", e.target.value)}
                 placeholder="Masukkan nama barang"
               />
+            </div>
+
+            <div className="mt-4">
+              <Label className="text-sm font-medium">
+                Scan Barcode (Opsional)
+              </Label>
+
+              {!isScanning ? (
+                <Button
+                  variant="outline"
+                  className="mt-2"
+                  onClick={() => setIsScanning(true)}
+                >
+                  <Camera className="w-4 h-4 mr-2" />
+                  Mulai Scan Barcode
+                </Button>
+              ) : (
+                <>
+                  <CameraBarcodeScanner
+                    active={isScanning}
+                    onDetected={(detectedBarcode) => {
+                      console.log("✅ Barcode terdeteksi:", detectedBarcode);
+                      updateFormData("part_number", detectedBarcode);
+                      setIsScanning(false);
+                    }}
+                  />
+                  <Button
+                    variant="destructive"
+                    className="mt-2"
+                    onClick={() => setIsScanning(false)}
+                  >
+                    Stop Kamera
+                  </Button>
+                </>
+              )}
+
+              {formData.part_number && (
+                <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                  <p className="text-sm text-green-700">
+                    Barcode:{" "}
+                    <span className="font-mono font-bold">
+                      {formData.part_number}
+                    </span>
+                  </p>
+                </div>
+              )}
             </div>
 
             <div>
